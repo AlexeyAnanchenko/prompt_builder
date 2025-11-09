@@ -8,12 +8,18 @@ class App(tk.Tk):
     """
 
     def __init__(self):
-        # Вызываем инициализатор родительского класса
         super().__init__()
         # Переопределяем заголовок главного окна
         self.title("SQL Prompt Builder")
         # Переопределяем начальные размеры главного окна
         self.geometry("1200x800")
+
+        # --- Создание и применение стиля для PanedWindow ---
+        style = ttk.Style()
+        # Настраиваем стиль для разделителя (sash) PanedWindow
+        # sashrelief - стиль границы,borderwidth - ширина границы
+        style.configure("TPanedwindow.Sash", relief=tk.FLAT)
+        style.configure("TPanedwindow", background="#FFFFFF")
 
         self._create_widgets()
 
@@ -24,29 +30,57 @@ class App(tk.Tk):
         Создает и размещает все виджеты в главном окне.
         """
 
-        # --- Верхняя панель ---
+        # --- Основная архитектура PanedWindow ---
 
-        # 1. Создаем контейнер - верхний фрейм
-        top_frame = ttk.Frame(self, padding="20")
-        # 2. Размещаем контейнер в окне
-        top_frame.pack(fill=tk.X, side=tk.TOP)
+        # Создаем основной фрейм приложения
+        main_frame = ttk.Frame(self, padding="5")
+        # Размещаем основной фрейм, растягивая по обеим осям
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Создаем вертикальную PanedWindow для изменения высоты между верхней и центральной частями
+        self.vertical_paned = ttk.PanedWindow(main_frame, orient=tk.VERTICAL)
+        self.vertical_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Создаем фрейм для верхней части (системный промпт)
+        self.top_pane_frame = ttk.Frame(self.vertical_paned, padding="10")
+        self.vertical_paned.add(self.top_pane_frame, weight=1)
+        
+        # Настраиваем сетку верхнего фрейма для динамического изменения размера
+        self.top_pane_frame.grid_rowconfigure(1, weight=1)  # Строка с текстовым полем может растягиваться
+        
+        # Создаем центральный фрейм для основного содержимого
+        self.center_frame = ttk.Frame(self.vertical_paned, padding="10")
+        self.vertical_paned.add(self.center_frame, weight=3)
+        
+        # Создаем горизонтальную PanedWindow для центральной части
+        self.horizontal_paned = ttk.PanedWindow(self.center_frame, orient=tk.HORIZONTAL)
+        self.horizontal_paned.pack(fill=tk.BOTH, expand=True)
 
-        # Создаем метку для поля системного промпта
-        self.system_prompt_label = ttk.Label(top_frame, text="Системный промпт:")
-        # Размещаем метку, растягивая по горизонтали с отступом по вертикали
-        self.system_prompt_label.pack(fill=tk.X, pady=5)
+        # --- Верхняя панель (Системный промпт) ---
 
-        # Создаем фрейм для текстового поля системного промпта и скроллбара
-        self.system_prompt_frame = ttk.Frame(top_frame)
-        self.system_prompt_frame.pack(fill=tk.X, expand=True, pady=5)
+        # Настраиваем веса строк верхнего фрейма
+        self.top_pane_frame.grid_rowconfigure(1, weight=1)  # Строка с текстовым полем может растягиваться
+        self.top_pane_frame.grid_columnconfigure(0, weight=1)  # Колонка может растягиваться по горизонтали
+
+        # Создаем метку для поля системного промпта (строка 0)
+        self.system_prompt_label = ttk.Label(self.top_pane_frame, text="Системный промпт:")
+        self.system_prompt_label.grid(row=0, column=0, sticky="ew", pady=5)
+
+        # Создаем фрейм для текстового поля системного промпта и скроллбара (строка 1)
+        self.system_prompt_frame = ttk.Frame(self.top_pane_frame)
+        self.system_prompt_frame.grid(row=1, column=0, sticky="nsew", pady=5)
+
+        # Настраиваем веса для фрейма текстового поля
+        self.system_prompt_frame.grid_rowconfigure(0, weight=1)
+        self.system_prompt_frame.grid_columnconfigure(0, weight=1)
 
         # Создаем скроллбар
         system_prompt_scrollbar = ttk.Scrollbar(self.system_prompt_frame)
-        system_prompt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        system_prompt_scrollbar.grid(row=0, column=1, sticky="ns")
 
         # Создаем текстовое поле для системного промпта
-        self.system_prompt_text = tk.Text(self.system_prompt_frame, height=5, wrap=tk.WORD, yscrollcommand=system_prompt_scrollbar.set)
-        self.system_prompt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.system_prompt_text = tk.Text(self.system_prompt_frame, wrap=tk.WORD, yscrollcommand=system_prompt_scrollbar.set)
+        self.system_prompt_text.grid(row=0, column=0, sticky="nsew")
         system_prompt_scrollbar.config(command=self.system_prompt_text.yview)
 
         # Вставляем текст по умолчанию в поле системного промпта
@@ -57,9 +91,9 @@ class App(tk.Tk):
         self.system_prompt_text.bind("<FocusIn>", lambda event: self.clear_placeholder(prompt_text))
         self.system_prompt_text.bind("<FocusOut>", lambda event: self.restore_placeholder(prompt_text))
 
-        # Фрейм для кнопок управления системным промптом
-        system_prompt_buttons_frame = ttk.Frame(top_frame)
-        system_prompt_buttons_frame.pack(fill=tk.X, pady=5)
+        # Фрейм для кнопок управления системным промптом (строка 2)
+        system_prompt_buttons_frame = ttk.Frame(self.top_pane_frame)
+        system_prompt_buttons_frame.grid(row=2, column=0, sticky="ew", pady=5)
 
         # Создаем кнопку для скрытия/показа системного промпта
         self.toggle_system_prompt_button = ttk.Button(system_prompt_buttons_frame, text="Скрыть", command=self.toggle_system_prompt)
@@ -73,11 +107,10 @@ class App(tk.Tk):
         self.copy_system_prompt_button = ttk.Button(system_prompt_buttons_frame, text="Копировать", command=self.copy_system_prompt)
         self.copy_system_prompt_button.pack(side=tk.LEFT)
 
-        # Создаем фрейм для пространства имен (namespace)
-        namespace_frame = ttk.Frame(top_frame)
-        # Размещаем фрейм пространства имен, растягивая по горизонтали с отступом по вертикали
-        namespace_frame.pack(fill=tk.X, pady=5)
-        
+        # Создаем фрейм для пространства имен (namespace) (строка 3)
+        namespace_frame = ttk.Frame(self.top_pane_frame)
+        namespace_frame.grid(row=3, column=0, sticky="ew", pady=5)
+          
         # Создаем метку для выпадающего списка пространства имен
         self.namespace_label = ttk.Label(namespace_frame, text="Namespace:")
         # Размещаем метку слева с отступом справа
@@ -89,30 +122,15 @@ class App(tk.Tk):
         self.namespace_combobox.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Создаем кнопку "Обновить векторную БД"
-        self.update_db_button = ttk.Button(top_frame, text="Обновить векторную БД", command=self.on_update_db_click)
+        self.update_db_button = ttk.Button(namespace_frame, text="Обновить векторную БД", command=self.on_update_db_click)
         # Размещаем кнопку справа с отступами по вертикали и горизонтали
-        self.update_db_button.pack(side=tk.RIGHT, pady=5, padx=5)
-
+        self.update_db_button.pack(side=tk.RIGHT, padx=(15, 0))
 
         # --- Центральная панель ---
 
-        # Создаем центральный фрейм с отступами
-        center_frame = ttk.Frame(self, padding="10")
-        # Размещаем центральный фрейм, растягивая по обеим осям
-        center_frame.pack(fill=tk.BOTH, expand=True)
-        # Настраиваем вес первой колонки сетки, чтобы она растягивалась
-        center_frame.grid_columnconfigure(0, weight=1)
-        # Настраиваем вес второй колонки сетки, чтобы она растягивалась
-        center_frame.grid_columnconfigure(1, weight=1)
-        # Настраиваем вес первой строки сетки, чтобы она растягивалась
-        center_frame.grid_rowconfigure(0, weight=1)
-
-        # Левая часть
-
-        # Создаем фрейм с заголовком "Мой запрос"
-        left_frame = ttk.LabelFrame(center_frame, text="Мой запрос", padding="10")
-        # Размещаем левый фрейм в сетке, растягивая по всем направлениям
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        # Левая часть - "Мой запрос"
+        left_frame = ttk.LabelFrame(self.horizontal_paned, text="Мой запрос", padding="10")
+        self.horizontal_paned.add(left_frame, weight=1)
         # Настраиваем вес первой строки сетки левого фрейма
         left_frame.grid_rowconfigure(0, weight=1)
         # Настраиваем вес первой колонки сетки левого фрейма
@@ -141,12 +159,9 @@ class App(tk.Tk):
         # Размещаем кнопку в сетке, растягивая по горизонтали
         self.copy_user_query_button.grid(row=1, column=1, sticky="ew", pady=(5, 0), padx=(2, 0))
 
-        # Правая часть
-
-        # Создаем фрейм с заголовком "Готовый промпт"
-        right_frame = ttk.LabelFrame(center_frame, text="Готовый промпт", padding="10")
-        # Размещаем правый фрейм в сетке, растягивая по всем направлениям
-        right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        # Правая часть - "Готовый промпт"
+        right_frame = ttk.LabelFrame(self.horizontal_paned, text="Готовый промпт", padding="10")
+        self.horizontal_paned.add(right_frame, weight=1)
         # Настраиваем вес первой строки сетки правого фрейма
         right_frame.grid_rowconfigure(0, weight=1)
         # Настраиваем вес первой колонки сетки правого фрейма
@@ -192,8 +207,6 @@ class App(tk.Tk):
         # Размещаем кнопку, растягивая ее, чтобы она заняла доступное место
         self.generate_button.pack(expand=True)
 
-
-
     # --- Функции-заглушки ---
 
 
@@ -217,29 +230,26 @@ class App(tk.Tk):
         """
         Скрывает или показывает поле системного промпта.
         """
+
         # Проверяем, скрыт ли в данный момент системный промпт
         if not hasattr(self, 'is_system_prompt_hidden'):
             self.is_system_prompt_hidden = False
         
         if self.is_system_prompt_hidden:
             # Если был скрыт, то показываем на исходных позициях
-            self.system_prompt_label.pack(
-                fill=tk.X,
-                pady=5,
-                before=self.toggle_system_prompt_button.master
-            )
-            self.system_prompt_frame.pack(
-                fill=tk.X,
-                expand=True,
-                pady=5,
-                before=self.toggle_system_prompt_button.master
-            )
+            self.system_prompt_label.grid(row=0, column=0, sticky="ew", pady=5)
+            self.system_prompt_frame.grid(row=1, column=0, sticky="nsew", pady=5)
+            # Настраиваем вес строки, чтобы она снова могла растягиваться
+            self.top_pane_frame.grid_rowconfigure(1, weight=1)
+
             self.toggle_system_prompt_button.config(text="Скрыть")
             self.is_system_prompt_hidden = False
         else:
             # Если был видим, то скрываем
-            self.system_prompt_label.pack_forget()
-            self.system_prompt_frame.pack_forget()
+            self.system_prompt_label.grid_forget()
+            self.system_prompt_frame.grid_forget()
+            # Убираем вес у строки, чтобы она "сжалась"
+            self.top_pane_frame.grid_rowconfigure(1, weight=0)
             self.toggle_system_prompt_button.config(text="Показать")
             self.is_system_prompt_hidden = True
 
