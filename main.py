@@ -32,11 +32,50 @@ class App(tk.Tk):
 
         # --- Основная архитектура PanedWindow ---
 
+        # --- Нижняя панель ---
+
+        # Создаем нижний фрейм с отступами
+        bottom_frame = ttk.Frame(self, padding="10")
+        # Размещаем нижний фрейм внизу окна, растягивая по горизонтали
+        bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # Создаем кнопку "Сгенерировать"
+        self.generate_button = ttk.Button(bottom_frame, text="Сгенерировать", command=self.on_generate_click)
+        # Размещаем кнопку, растягивая ее, чтобы она заняла доступное место
+        self.generate_button.pack(expand=True)
+
+        # --- Основной контент ---
+
         # Создаем основной фрейм приложения
         main_frame = ttk.Frame(self, padding="5")
         # Размещаем основной фрейм, растягивая по обеим осям
         main_frame.pack(fill=tk.BOTH, expand=True)
         
+        ### ИЗМЕНЕНИЕ: Создаем верхний постоянный фрейм для элементов управления ###
+        top_controls_frame = ttk.Frame(main_frame)
+        top_controls_frame.pack(fill=tk.X, pady=(0, 5))
+
+        # Создаем кнопку для скрытия/показа системного промпта
+        self.toggle_system_prompt_button = ttk.Button(top_controls_frame, text="Скрыть", command=self.toggle_system_prompt)
+        self.toggle_system_prompt_button.pack(side=tk.LEFT, padx=(0, 15))
+
+        # Создаем фрейм для пространства имен (namespace)
+        namespace_frame = ttk.Frame(top_controls_frame)
+        namespace_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+          
+        # Создаем метку для выпадающего списка пространства имен
+        self.namespace_label = ttk.Label(namespace_frame, text="Namespace:")
+        self.namespace_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        # Создаем выпадающий список для пространства имен
+        self.namespace_combobox = ttk.Combobox(namespace_frame, values=[], state="readonly")
+        self.namespace_combobox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Создаем кнопку "Обновить векторную БД"
+        self.update_db_button = ttk.Button(top_controls_frame, text="Обновить векторную БД", command=self.on_update_db_click)
+        self.update_db_button.pack(side=tk.RIGHT, padx=(15, 0))
+
+        ### ИЗМЕНЕНИЕ: PanedWindow теперь находится под фреймом с контролами ###
         # Создаем вертикальную PanedWindow для изменения высоты между верхней и центральной частями
         self.vertical_paned = ttk.PanedWindow(main_frame, orient=tk.VERTICAL)
         self.vertical_paned.pack(fill=tk.BOTH, expand=True)
@@ -46,10 +85,11 @@ class App(tk.Tk):
         self.vertical_paned.add(self.top_pane_frame, weight=1)
         
         # Настраиваем сетку верхнего фрейма для динамического изменения размера
-        self.top_pane_frame.grid_rowconfigure(1, weight=1)  # Строка с текстовым полем может растягиваться
+        self.top_pane_frame.grid_rowconfigure(1, weight=1)
+        self.top_pane_frame.grid_columnconfigure(0, weight=1)
         
         # Создаем центральный фрейм для основного содержимого
-        self.center_frame = ttk.Frame(self.vertical_paned, padding="10")
+        self.center_frame = ttk.Frame(self.vertical_paned) # Убрал padding, т.к. он в horizontal_paned
         self.vertical_paned.add(self.center_frame, weight=3)
         
         # Создаем горизонтальную PanedWindow для центральной части
@@ -95,10 +135,6 @@ class App(tk.Tk):
         system_prompt_buttons_frame = ttk.Frame(self.top_pane_frame)
         system_prompt_buttons_frame.grid(row=2, column=0, sticky="ew", pady=5)
 
-        # Создаем кнопку для скрытия/показа системного промпта
-        self.toggle_system_prompt_button = ttk.Button(system_prompt_buttons_frame, text="Скрыть", command=self.toggle_system_prompt)
-        self.toggle_system_prompt_button.pack(side=tk.LEFT, padx=(0, 5))
-
         # Создаем кнопку "Очистить" для поля системного промпта
         self.clear_system_prompt_button = ttk.Button(system_prompt_buttons_frame, text="Очистить", command=self.clear_system_prompt)
         self.clear_system_prompt_button.pack(side=tk.LEFT, padx=(0, 5))
@@ -107,24 +143,6 @@ class App(tk.Tk):
         self.copy_system_prompt_button = ttk.Button(system_prompt_buttons_frame, text="Копировать", command=self.copy_system_prompt)
         self.copy_system_prompt_button.pack(side=tk.LEFT)
 
-        # Создаем фрейм для пространства имен (namespace) (строка 3)
-        namespace_frame = ttk.Frame(self.top_pane_frame)
-        namespace_frame.grid(row=3, column=0, sticky="ew", pady=5)
-          
-        # Создаем метку для выпадающего списка пространства имен
-        self.namespace_label = ttk.Label(namespace_frame, text="Namespace:")
-        # Размещаем метку слева с отступом справа
-        self.namespace_label.pack(side=tk.LEFT, padx=(0, 5))
-
-        # Создаем выпадающий список для пространства имен
-        self.namespace_combobox = ttk.Combobox(namespace_frame, values=[], state="readonly")
-        # Размещаем выпадающий список слева, растягивая по горизонтали
-        self.namespace_combobox.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Создаем кнопку "Обновить векторную БД"
-        self.update_db_button = ttk.Button(namespace_frame, text="Обновить векторную БД", command=self.on_update_db_click)
-        # Размещаем кнопку справа с отступами по вертикали и горизонтали
-        self.update_db_button.pack(side=tk.RIGHT, padx=(15, 0))
 
         # --- Центральная панель ---
 
@@ -195,17 +213,6 @@ class App(tk.Tk):
         # Размещаем метку в сетке, выравнивая по правому краю
         self.token_counter_label.grid(row=2, column=0, columnspan=2, sticky="e", pady=(5, 0))
 
-        # --- Нижняя панель ---
-
-        # Создаем нижний фрейм с отступами
-        bottom_frame = ttk.Frame(self, padding="10")
-        # Размещаем нижний фрейм внизу окна, растягивая по горизонтали
-        bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
-
-        # Создаем кнопку "Сгенерировать"
-        self.generate_button = ttk.Button(bottom_frame, text="Сгенерировать", command=self.on_generate_click)
-        # Размещаем кнопку, растягивая ее, чтобы она заняла доступное место
-        self.generate_button.pack(expand=True)
 
     # --- Функции-заглушки ---
 
@@ -224,43 +231,26 @@ class App(tk.Tk):
         if not self.system_prompt_text.get("1.0", "end-1c").strip():
             self.system_prompt_text.insert("1.0", text)
 
-
     # Определяем метод для скрытия/показа системного промпта
     def toggle_system_prompt(self):
         """
-        Скрывает или показывает поле системного промпта и перераспределяет пространство.
+        Скрывает или показывает панель системного промпта, используя методы PanedWindow.
         """
-
-        # Проверяем, скрыт ли в данный момент системный промпт
+        # Проверяем, существует ли атрибут. Если нет, создаем его.
         if not hasattr(self, 'is_system_prompt_hidden'):
             self.is_system_prompt_hidden = False
         
         if self.is_system_prompt_hidden:
-            # Если был скрыт, то показываем на исходных позициях
-            self.system_prompt_label.grid(row=0, column=0, sticky="ew", pady=5)
-            self.system_prompt_frame.grid(row=1, column=0, sticky="nsew", pady=5)
-            # Настраиваем вес строки, чтобы она снова могла растягиваться
-            self.top_pane_frame.grid_rowconfigure(1, weight=1)
-            
-            # Восстанавливаем вес верхней панели
-            self.vertical_paned.pane(self.top_pane_frame, weight=1)
-
+            # Если панель была скрыта, добавляем ее обратно
+            self.vertical_paned.insert(0, self.top_pane_frame, weight=1)
             self.toggle_system_prompt_button.config(text="Скрыть")
             self.is_system_prompt_hidden = False
         else:
-            # Если был видим, то скрываем только текстовое поле и метку
-            self.system_prompt_label.grid_forget()
-            self.system_prompt_frame.grid_forget()
-            # Убираем вес у строки, чтобы она "сжалась"
-            self.top_pane_frame.grid_rowconfigure(1, weight=0)
-            
-            # Минимизируем высоту верхней панели, устанавливая минимальный вес
-            self.vertical_paned.pane(self.top_pane_frame, weight=0)
-
+            # Если панель видна, убираем ее из PanedWindow
+            self.vertical_paned.forget(self.top_pane_frame)
             self.toggle_system_prompt_button.config(text="Показать")
             self.is_system_prompt_hidden = True
 
-        # Выводим сообщение в консоль для отладки
         print("Кнопка 'Скрыть/Показать' нажата")
 
 
