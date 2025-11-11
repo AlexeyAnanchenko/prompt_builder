@@ -228,7 +228,7 @@ class App(tk.Tk):
     # Определяем метод для скрытия/показа системного промпта
     def toggle_system_prompt(self):
         """
-        Скрывает или показывает поле системного промпта.
+        Скрывает или показывает поле системного промпта и перераспределяет пространство.
         """
 
         # Проверяем, скрыт ли в данный момент системный промпт
@@ -241,15 +241,22 @@ class App(tk.Tk):
             self.system_prompt_frame.grid(row=1, column=0, sticky="nsew", pady=5)
             # Настраиваем вес строки, чтобы она снова могла растягиваться
             self.top_pane_frame.grid_rowconfigure(1, weight=1)
+            
+            # Восстанавливаем вес верхней панели
+            self.vertical_paned.pane(self.top_pane_frame, weight=1)
 
             self.toggle_system_prompt_button.config(text="Скрыть")
             self.is_system_prompt_hidden = False
         else:
-            # Если был видим, то скрываем
+            # Если был видим, то скрываем только текстовое поле и метку
             self.system_prompt_label.grid_forget()
             self.system_prompt_frame.grid_forget()
             # Убираем вес у строки, чтобы она "сжалась"
             self.top_pane_frame.grid_rowconfigure(1, weight=0)
+            
+            # Минимизируем высоту верхней панели, устанавливая минимальный вес
+            self.vertical_paned.pane(self.top_pane_frame, weight=0)
+
             self.toggle_system_prompt_button.config(text="Показать")
             self.is_system_prompt_hidden = True
 
