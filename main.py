@@ -10,7 +10,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         # Переопределяем заголовок главного окна
-        self.title("SQL Prompt Builder")
+        self.title("Prompt Builder")
         # Переопределяем начальные размеры главного окна
         self.geometry("1200x800")
 
@@ -20,6 +20,11 @@ class App(tk.Tk):
         # sashrelief - стиль границы,borderwidth - ширина границы
         style.configure("TPanedwindow.Sash", relief=tk.FLAT)
         style.configure("TPanedwindow", background="#FFFFFF")
+
+        try:
+            self.iconbitmap('images/logo.ico') 
+        except tk.TclError:
+            print("Не удалось найти файл иконки. Убедитесь, что путь верный.")
 
         self._create_widgets()
 
