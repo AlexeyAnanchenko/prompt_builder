@@ -1,3 +1,4 @@
 db_scripts_origin/
 env/
 models/
+__pycache__/
