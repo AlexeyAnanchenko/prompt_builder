@@ -2,3 +2,4 @@ db_scripts_origin/
 env/
 models/
 __pycache__/
+prompt_versions.json
