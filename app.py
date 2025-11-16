@@ -4,6 +4,7 @@ import os
 import json
 from datetime import datetime
 from typing import List, Dict
+from pathlib import Path
 
 # Добавляем путь к модулям проекта
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -16,7 +17,31 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- Инициализация session_state (ВАЖНО: только один раз) ---
+# --- Константы ---
+VERSIONS_FILE = Path("prompt_versions.json")
+
+# --- Функции для работы с файлами ---
+
+def load_versions_from_file() -> Dict:
+    """Загружает версии промптов из файла"""
+    if VERSIONS_FILE.exists():
+        try:
+            with open(VERSIONS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            st.error(f"❌ Ошибка загрузки версий: {str(e)}")
+            return {}
+    return {}
+
+def save_versions_to_file(versions: Dict):
+    """Сохраняет версии промптов в файл"""
+    try:
+        with open(VERSIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(versions, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        st.error(f"❌ Ошибка сохранения версий: {str(e)}")
+
+# --- Инициализация session_state ---
 def init_session_state():
     """Централизованная инициализация session_state"""
     defaults = {
@@ -25,8 +50,9 @@ def init_session_state():
         'final_prompt': "",
         'token_count': 0,
         'selected_namespace': "",
-        'prompt_versions': {},  # {version_name: {prompt: str, created: str, modified: str}}
-        'current_version': None,  # Название текущей активной версии
+        'prompt_versions': load_versions_from_file(),  # Загружаем из файла
+        'current_version': None,
+        'show_system_prompt': True,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -53,12 +79,12 @@ def save_version(version_name: str, prompt_text: str):
         }
     
     st.session_state.current_version = version_name
+    save_versions_to_file(st.session_state.prompt_versions)
 
 def load_version(version_name: str):
     """Загружает версию промпта"""
     if version_name in st.session_state.prompt_versions:
         st.session_state.system_prompt = st.session_state.prompt_versions[version_name]['prompt']
-        # ВАЖНО: обновляем также состояние виджета text_area
         st.session_state.system_prompt_input = st.session_state.prompt_versions[version_name]['prompt']
         st.session_state.current_version = version_name
 
@@ -68,6 +94,7 @@ def delete_version(version_name: str):
         del st.session_state.prompt_versions[version_name]
         if st.session_state.current_version == version_name:
             st.session_state.current_version = None
+        save_versions_to_file(st.session_state.prompt_versions)
 
 def export_versions() -> str:
     """Экспортирует все версии в JSON"""
@@ -78,6 +105,7 @@ def import_versions(json_data: str):
     try:
         imported = json.loads(json_data)
         st.session_state.prompt_versions.update(imported)
+        save_versions_to_file(st.session_state.prompt_versions)
         return True, f"Импортировано {len(imported)} версий"
     except Exception as e:
         return False, f"Ошибка импорта: {str(e)}"
@@ -163,57 +191,35 @@ def clear_final_prompt():
     st.session_state.final_prompt = ""
     st.session_state.token_count = 0
 
+# --- CSS для улучшения визуального оформления ---
+st.markdown("""
+<style>
+    /* Уменьшаем промежутки между кнопками */
+    div[data-testid="column"] {
+        padding: 0 5px !important;
+    }
+    
+    /* Выравнивание элементов */
+    .stButton button {
+        width: 100%;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # --- Основной интерфейс ---
 
 # Заголовок приложения
 st.title("🔨 Prompt Builder")
 
-# Верхняя панель управления
+# Системный промпт с версионированием (условно отображаемый)
 with st.container():
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col1:
-        if 'show_system_prompt' not in st.session_state:
-            st.session_state.show_system_prompt = True
-            
+    col_toggle, col_spacer = st.columns([1, 5])
+    with col_toggle:
         st.toggle(
             "Показать системный промпт",
             key="show_system_prompt"
         )
-    
-    with col2:
-        namespaces = load_namespaces()
-        if namespaces:
-            if st.session_state.selected_namespace not in namespaces:
-                st.session_state.selected_namespace = namespaces[0]
-            
-            selected = st.selectbox(
-                "Выберите namespace",
-                options=namespaces,
-                index=namespaces.index(st.session_state.selected_namespace),
-                key="namespace_selector"
-            )
-            st.session_state.selected_namespace = selected
-        else:
-            st.warning("⚠️ Нет доступных namespace")
-    
-    with col3:
-        if st.button("🔄 Обновить векторную БД", use_container_width=True):
-            with st.spinner('Обновление базы...'):
-                try:
-                    db_manager = get_db_manager()
-                    vector_manager = get_vector_store_manager()
-                    
-                    data = db_manager.fetch_all_data_by_namespace(st.session_state.selected_namespace)
-                    result = vector_manager.rebuild_database(data, st.session_state.selected_namespace)
-                    
-                    st.success(f"✅ Векторная база успешно обновлена! {result}")
-                except Exception as e:
-                    st.error(f"❌ Ошибка при обновлении: {str(e)}")
 
-st.markdown("---")
-
-# Системный промпт с версионированием (условно отображаемый)
 if st.session_state.show_system_prompt:
     # Панель управления версиями
     with st.expander("📚 Управление версиями системного промпта", expanded=True):
@@ -221,7 +227,7 @@ if st.session_state.show_system_prompt:
         
         # Вкладка сохранения
         with tab1:
-            col_save_name, col_save_btn = st.columns([3, 1])
+            col_save_name, col_save_btn = st.columns([4, 1])
             with col_save_name:
                 save_name = st.text_input(
                     "Название версии",
@@ -229,7 +235,7 @@ if st.session_state.show_system_prompt:
                     key="save_version_name"
                 )
             with col_save_btn:
-                st.write("")  # Отступ для выравнивания
+                st.write("")
                 st.write("")
                 if st.button("💾 Сохранить", use_container_width=True):
                     if save_name.strip():
@@ -254,14 +260,13 @@ if st.session_state.show_system_prompt:
                             st.caption(f"Создана: {version_data['created']} | "
                                      f"Изменена: {version_data['modified']}")
                             
-                            # Сворачиваемый текст промпта
                             with st.expander("👁️ Показать текст промпта", expanded=False):
                                 st.text_area(
                                     "Текст промпта",
                                     value=version_data['prompt'],
                                     height=200,
                                     disabled=True,
-                                    key=f"preview_{version_name}",
+                                    key=f"preview_{version_name}_{version_data['modified']}",
                                     label_visibility="collapsed"
                                 )
                         
@@ -269,13 +274,15 @@ if st.session_state.show_system_prompt:
                             col_load, col_del = st.columns(2)
                             with col_load:
                                 if st.button("📥", key=f"load_{version_name}", 
-                                           help="Загрузить эту версию"):
+                                           help="Загрузить эту версию",
+                                           use_container_width=True):
                                     load_version(version_name)
                                     st.success(f"✅ Загружена версия '{version_name}'")
                                     st.rerun()
                             with col_del:
                                 if st.button("🗑️", key=f"delete_{version_name}",
-                                           help="Удалить эту версию"):
+                                           help="Удалить эту версию",
+                                           use_container_width=True):
                                     delete_version(version_name)
                                     st.success(f"✅ Версия '{version_name}' удалена")
                                     st.rerun()
@@ -303,20 +310,39 @@ if st.session_state.show_system_prompt:
         help="Системный промпт будет добавлен в начало финального промпта"
     )
     
-    # Кнопки управления системным промптом
-    col_clear, col_copy = st.columns(2)
+    # Кнопки управления системным промптом (рядом друг с другом)
+    col_clear, col_copy = st.columns([1, 1])
     with col_clear:
-        st.button("🗑️ Очистить", on_click=clear_system_prompt, key="clear_sys")
+        st.button("🗑️ Очистить", on_click=clear_system_prompt, key="clear_sys", use_container_width=True)
     with col_copy:
         if st.session_state.system_prompt:
-            if st.button("📋 Копировать", key="copy_sys"):
+            if st.button("📋 Копировать", key="copy_sys", use_container_width=True):
                 st.write(f'<textarea id="sys_copy" style="position:absolute;left:-9999px">{st.session_state.system_prompt}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("sys_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
                 st.toast("✅ Скопировано!")
         else:
-            st.button("📋 Копировать", key="copy_sys", disabled=True)
+            st.button("📋 Копировать", key="copy_sys", disabled=True, use_container_width=True)
     
     st.markdown("---")
+
+# Выбор namespace над основными колонками
+with st.container():
+    namespaces = load_namespaces()
+    if namespaces:
+        if st.session_state.selected_namespace not in namespaces:
+            st.session_state.selected_namespace = namespaces[0]
+        
+        selected = st.selectbox(
+            "📂 Выберите namespace",
+            options=namespaces,
+            index=namespaces.index(st.session_state.selected_namespace),
+            key="namespace_selector"
+        )
+        st.session_state.selected_namespace = selected
+    else:
+        st.warning("⚠️ Нет доступных namespace")
+
+st.markdown("---")
 
 # Основной контент - две колонки
 col_left, col_right = st.columns(2)
@@ -338,18 +364,18 @@ with col_left:
         label_visibility="collapsed"
     )
     
-    # Кнопки управления пользовательским запросом
-    col_clear_user, col_copy_user = st.columns(2)
+    # Кнопки управления пользовательским запросом (рядом друг с другом)
+    col_clear_user, col_copy_user = st.columns([1, 1])
     with col_clear_user:
-        st.button("🗑️ Очистить запрос", on_click=clear_user_query, key="clear_user")
+        st.button("🗑️ Очистить запрос", on_click=clear_user_query, key="clear_user", use_container_width=True)
     with col_copy_user:
         if st.session_state.user_query:
-            if st.button("📋 Копировать запрос", key="copy_user"):
+            if st.button("📋 Копировать запрос", key="copy_user", use_container_width=True):
                 st.write(f'<textarea id="user_copy" style="position:absolute;left:-9999px">{st.session_state.user_query}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("user_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
                 st.toast("✅ Скопировано!")
         else:
-            st.button("📋 Копировать запрос", key="copy_user", disabled=True)
+            st.button("📋 Копировать запрос", key="copy_user", disabled=True, use_container_width=True)
 
 # Правая колонка - "Готовый промпт"
 with col_right:
@@ -360,18 +386,18 @@ with col_right:
     else:
         st.info("👈 Введите запрос и нажмите 'Сгенерировать'")
     
-    # Кнопки управления готовым промптом
-    col_clear_final, col_copy_final = st.columns(2)
+    # Кнопки управления готовым промптом (рядом друг с другом)
+    col_clear_final, col_copy_final = st.columns([1, 1])
     with col_clear_final:
-        st.button("🗑️ Очистить промпт", on_click=clear_final_prompt, key="clear_final")
+        st.button("🗑️ Очистить промпт", on_click=clear_final_prompt, key="clear_final", use_container_width=True)
     with col_copy_final:
         if st.session_state.final_prompt:
-            if st.button("📋 Копировать промпт", key="copy_final"):
+            if st.button("📋 Копировать промпт", key="copy_final", use_container_width=True):
                 st.write(f'<textarea id="final_copy" style="position:absolute;left:-9999px">{st.session_state.final_prompt}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("final_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
                 st.toast("✅ Скопировано!")
         else:
-            st.button("📋 Копировать промпт", key="copy_final", disabled=True)
+            st.button("📋 Копировать промпт", key="copy_final", disabled=True, use_container_width=True)
     
     # Счетчик токенов с визуализацией
     token_count = st.session_state.token_count
@@ -384,10 +410,25 @@ with col_right:
     with col_bar:
         st.progress(progress)
 
-# Нижняя панель - кнопка генерации
+# Нижняя панель - кнопки действий
 st.markdown("---")
 
-col_gen, col_info = st.columns([3, 1])
+col_refresh, col_gen, col_info = st.columns([1, 2, 1])
+
+with col_refresh:
+    if st.button("🔄 Обновить векторную БД", use_container_width=True):
+        with st.spinner('Обновление базы...'):
+            try:
+                db_manager = get_db_manager()
+                vector_manager = get_vector_store_manager()
+                
+                data = db_manager.fetch_all_data_by_namespace(st.session_state.selected_namespace)
+                result = vector_manager.rebuild_database(data, st.session_state.selected_namespace)
+                
+                st.success(f"✅ Векторная база успешно обновлена! {result}")
+            except Exception as e:
+                st.error(f"❌ Ошибка при обновлении: {str(e)}")
+
 with col_gen:
     if st.button("🚀 Сгенерировать промпт", type="primary", use_container_width=True):
         if not st.session_state.user_query.strip():
@@ -420,16 +461,17 @@ with col_info:
         **Версионирование:**
         - Сохраняйте разные варианты промптов
         - Быстро переключайтесь между версиями
-        - Экспортируйте/импортируйте версии
+        - Версии автоматически сохраняются в файл
         """)
 
 # Информация в сайдбаре
 st.sidebar.markdown("### 📊 О приложении")
 st.sidebar.info("""
-**Prompt Builder v2.0**
+**Prompt Builder v2.1**
 
 Приложение для построения промптов с:
 - Версионированием системных промптов
+- Автосохранением версий в файл
 - Векторной базой данных
 - Контекстным поиском
 - Автоматической генерацией SQL
