@@ -312,7 +312,7 @@ if st.session_state.show_system_prompt:
             if st.button("📋 Копировать", key="copy_sys"):
                 st.write(f'<textarea id="sys_copy" style="position:absolute;left:-9999px">{st.session_state.system_prompt}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("sys_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
-                st.toast("✅ Скопировано!", icon="✅")
+                st.toast("✅ Скопировано!")
         else:
             st.button("📋 Копировать", key="copy_sys", disabled=True)
     
@@ -347,7 +347,7 @@ with col_left:
             if st.button("📋 Копировать запрос", key="copy_user"):
                 st.write(f'<textarea id="user_copy" style="position:absolute;left:-9999px">{st.session_state.user_query}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("user_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
-                st.toast("✅ Скопировано!", icon="✅")
+                st.toast("✅ Скопировано!")
         else:
             st.button("📋 Копировать запрос", key="copy_user", disabled=True)
 
@@ -369,7 +369,7 @@ with col_right:
             if st.button("📋 Копировать промпт", key="copy_final"):
                 st.write(f'<textarea id="final_copy" style="position:absolute;left:-9999px">{st.session_state.final_prompt}</textarea>', unsafe_allow_html=True)
                 st.write('<script>document.getElementById("final_copy").select();document.execCommand("copy");</script>', unsafe_allow_html=True)
-                st.toast("✅ Скопировано!", icon="✅")
+                st.toast("✅ Скопировано!")
         else:
             st.button("📋 Копировать промпт", key="copy_final", disabled=True)
     
