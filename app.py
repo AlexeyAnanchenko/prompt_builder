@@ -114,9 +114,9 @@ def init_session_state():
         'selected_namespace': "",
         'prompt_versions': load_versions_from_file(),
         'current_version': None,
-        'show_step1': True,
+        'show_step1': False,
         'show_step2': True,
-        'show_step3': True,
+        'show_step3': False,
         'enable_masking': True,
     }
     for key, value in defaults.items():
@@ -148,6 +148,7 @@ def load_version(version_name: str):
     """Загружает версию промпта"""
     if version_name in st.session_state.prompt_versions:
         st.session_state.system_prompt = st.session_state.prompt_versions[version_name]['prompt']
+        st.session_state.current_version = version_name
 
 def delete_version(version_name: str):
     """Удаляет версию промпта"""
@@ -330,7 +331,7 @@ if st.session_state.show_step1:
                                 st.caption(f"Создана: {version_data['created']} | "
                                          f"Изменена: {version_data['modified']}")
                                 
-                                with st.expander("👁️ Показать текст промпта", expanded=False):
+                                with st.expander("🔍 Показать текст промпта", expanded=False):
                                     st.text_area(
                                         "Текст промпта",
                                         value=version_data['prompt'],
@@ -376,6 +377,7 @@ if st.session_state.show_step1:
         col_clear, col_copy = st.columns([1, 1])
         with col_clear:
             if st.button("🗑️ Очистить", key="clear_sys", use_container_width=True, 
+                        disabled=not st.session_state.system_prompt,
                         on_click=lambda: st.session_state.update({'system_prompt': ''})):
                 pass
         with col_copy:
@@ -416,7 +418,7 @@ if st.session_state.show_step2:
                 st.warning("⚠️ Нет доступных namespace")
         
         with col_masking:
-            st.write("")  # Отступ для выравнивания
+            st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
             masking_enabled = st.checkbox(
                 "🎭 Включить маскирование",
                 value=st.session_state.enable_masking,
@@ -445,6 +447,7 @@ if st.session_state.show_step2:
         col_clear_user, col_copy_user = st.columns([1, 1])
         with col_clear_user:
             if st.button("🗑️ Очистить запрос", key="clear_user", use_container_width=True,
+                        disabled=not st.session_state.user_query,
                         on_click=lambda: st.session_state.update({'user_query': ''})):
                 pass
         with col_copy_user:
@@ -483,6 +486,7 @@ if st.session_state.show_step2:
         col_clear_final, col_copy_final = st.columns([1, 1])
         with col_clear_final:
             if st.button("🗑️ Очистить промпт", key="clear_final", use_container_width=True,
+                        disabled=not st.session_state.final_prompt,
                         on_click=lambda: st.session_state.update({
                             'final_prompt': '', 
                             'masked_prompt': '', 
@@ -632,6 +636,7 @@ if st.session_state.show_step3:
         
         with col_clear_llm:
             if st.button("🗑️ Очистить", key="clear_llm", use_container_width=True,
+                        disabled=not st.session_state.llm_response,
                         on_click=lambda: st.session_state.update({
                             'llm_response': '', 
                             'unmasked_response': ''
@@ -662,30 +667,26 @@ st.markdown("---")
 # Информация в сайдбаре
 st.sidebar.markdown("### 📊 О приложении")
 st.sidebar.info("""
-**Prompt Builder v3.0**
+**Prompt Builder v1.0**
 
 Приложение для построения промптов с:
-- 🎭 Маскированием конфиденциальных данных
-- 🔓 Расшифровкой ответов LLM
-- 📚 Версионированием системных промптов
-- 💾 Автосохранением версий в файл
-- 🔍 Векторной базой данных
-- 🤖 Контекстным поиском
+- 📚 Версионированием системных промптов;
+- 🔍 Контекстным поиском (RAG) по запросу клиента;
+- 🎭 Маскированием конфиденциальных данных;
+- 🔓 Обратной расшифровкой замаскированного текста в ответах LLM.
 """)
 
 st.sidebar.markdown("### 📈 Статистика")
-st.sidebar.metric("Сохраненных версий", len(st.session_state.prompt_versions))
-# <-- ИСПРАВЛЕНИЕ 5: Гарантируем, что len() вызывается для строки
-st.sidebar.metric("Длина системного промпта", f"{len(st.session_state.system_prompt or '')} символов")
-# <-- ИСПРАВЛЕНИЕ 6: Гарантируем, что len() вызывается для строки
-st.sidebar.metric("Длина запроса", f"{len(st.session_state.user_query or '')} символов")
-st.sidebar.metric("Токенов в финальном промпте", st.session_state.token_count)
+st.sidebar.metric("Версий системного промпта:", len(st.session_state.prompt_versions))
+st.sidebar.metric("Длина системного промпта (символов):", f"{len(st.session_state.system_prompt or '')}")
+st.sidebar.metric("Длина запроса (символов):", f"{len(st.session_state.user_query or '')}")
+st.sidebar.metric("Токенов в финальном промпте:", st.session_state.token_count)
 
 if st.session_state.enable_masking:
-    st.sidebar.metric("🎭 Замаскированных элементов", len(st.session_state.masking_dictionary))
+    st.sidebar.metric("Замаскированных элементов:", len(st.session_state.masking_dictionary))
 
 if st.session_state.current_version:
-    st.sidebar.success(f"🟢 Активна: {st.session_state.current_version}")
+    st.sidebar.success(f"🟢 Активная версия системного промпта: {st.session_state.current_version}")
 
 # Показываем текущий словарь маскирования в сайдбаре
 if st.session_state.masking_dictionary:
