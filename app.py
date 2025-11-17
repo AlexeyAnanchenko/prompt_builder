@@ -245,38 +245,41 @@ st.markdown("""
         width: 100%;
     }
     
-    .step-header {
-        background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        margin: 20px 0 15px 0;
-        font-size: 1.3em;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        cursor: pointer;
-        user-select: none;
-        transition: all 0.3s ease;
+    /* СНАЧАЛА зеленые стили для этапов */
+    button[kind="primary"] {
+        background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%) !important;
+        color: white !important;
+        border: none !important;
+        padding: 15px 20px !important;
+        border-radius: 10px !important;
+        font-size: 1.1em !important;
+        font-weight: bold !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        transition: all 0.3s ease !important;
+        margin: 20px 0 15px 0 !important;
     }
     
-    .step-header:hover {
-        background: linear-gradient(90deg, #45a049 0%, #4CAF50 100%);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    button[kind="primary"]:hover {
+        background: linear-gradient(90deg, #45a049 0%, #4CAF50 100%) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+        transform: translateY(-2px);
     }
     
-    .step-number {
-        background: white;
-        color: #4CAF50;
-        border-radius: 50%;
-        padding: 5px 12px;
-        margin-right: 10px;
-        font-size: 1.1em;
-        font-weight: bold;
+    /* ПОТОМ красные - они переопределят для кнопок в колонках */
+    .stColumn button[kind="primary"],
+    .stColumn .stButton button[kind="primary"] {
+        background: linear-gradient(90deg, #ff4b4b 0%, #ff3333 100%) !important;
+        margin: 0 !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 1rem !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
     }
     
-    .collapse-icon {
-        float: right;
-        font-size: 1.2em;
+    .stColumn button[kind="primary"]:hover,
+    .stColumn .stButton button[kind="primary"]:hover {
+        background: linear-gradient(90deg, #ff3333 0%, #ff1a1a 100%) !important;
+        box-shadow: 0 2px 6px rgba(255, 75, 75, 0.4) !important;
+        transform: translateY(-1px) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -287,7 +290,12 @@ st.title("🔨 Prompt Builder")
 
 # ========== ЭТАП 1: Системный промпт ==========
 step1_icon = "▼" if st.session_state.show_step1 else "▶"
-if st.button(f'1️⃣ Настройка системного промпта {step1_icon}', key='step1_toggle', use_container_width=True):
+if st.button(
+    f'1️⃣ Настройка системного промпта {step1_icon}', 
+    key='step1_toggle', 
+    use_container_width=True,
+    type='primary'  # Делаем primary чтобы отличать от других кнопок
+):
     st.session_state.show_step1 = not st.session_state.show_step1
     st.rerun()
 
@@ -392,7 +400,12 @@ if st.session_state.show_step1:
 
 # ========== ЭТАП 2: Генерация промпта ==========
 step2_icon = "▼" if st.session_state.show_step2 else "▶"
-if st.button(f'2️⃣ Генерация промпта с контекстом {step2_icon}', key='step2_toggle', use_container_width=True):
+if st.button(
+    f'2️⃣ Генерация промпта с контекстом {step2_icon}', 
+    key='step2_toggle', 
+    use_container_width=True,
+    type='primary'  # Делаем primary
+):
     st.session_state.show_step2 = not st.session_state.show_step2
     st.rerun()
 
@@ -599,7 +612,12 @@ if st.session_state.show_step2:
 
 # ========== ЭТАП 3: Расшифровка ответа LLM ==========
 step3_icon = "▼" if st.session_state.show_step3 else "▶"
-if st.button(f'3️⃣ Расшифровка ответа LLM {step3_icon}', key='step3_toggle', use_container_width=True):
+if st.button(
+    f'3️⃣ Расшифровка ответа LLM {step3_icon}', 
+    key='step3_toggle', 
+    use_container_width=True,
+    type='primary'  # Делаем primary
+):
     st.session_state.show_step3 = not st.session_state.show_step3
     st.rerun()
 
