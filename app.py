@@ -371,21 +371,17 @@ if st.session_state.show_step1:
         
         system_prompt_value = st.text_area(
             version_label,
-            value=st.session_state.system_prompt,
             height=150,
             placeholder="Введите системный промпт здесь...",
-            key='system_prompt_input',
+            key='system_prompt',
             help="Системный промпт будет добавлен в начало финального промпта"
         )
         
-        # Обновляем значение в session_state
-        st.session_state.system_prompt = system_prompt_value
-        
         col_clear, col_copy = st.columns([1, 1])
         with col_clear:
-            if st.button("🗑️ Очистить", key="clear_sys", use_container_width=True):
-                st.session_state.system_prompt = ""
-                st.rerun()
+            if st.button("🗑️ Очистить", key="clear_sys", use_container_width=True, 
+                        on_click=lambda: st.session_state.update({'system_prompt': ''})):
+                pass
         with col_copy:
             if st.session_state.system_prompt:
                 if st.button("📋 Копировать", key="copy_sys", use_container_width=True):
@@ -444,21 +440,17 @@ if st.session_state.show_step2:
         
         user_query_value = st.text_area(
             "Введите ваш запрос",
-            value=st.session_state.user_query,
             height=400,
             placeholder="Введите ваш запрос здесь...",
-            key='user_query_input',
+            key='user_query',
             label_visibility="collapsed"
         )
         
-        # Обновляем значение в session_state
-        st.session_state.user_query = user_query_value
-        
         col_clear_user, col_copy_user = st.columns([1, 1])
         with col_clear_user:
-            if st.button("🗑️ Очистить запрос", key="clear_user", use_container_width=True):
-                st.session_state.user_query = ""
-                st.rerun()
+            if st.button("🗑️ Очистить запрос", key="clear_user", use_container_width=True,
+                        on_click=lambda: st.session_state.update({'user_query': ''})):
+                pass
         with col_copy_user:
             if st.session_state.user_query:
                 if st.button("📋 Копировать запрос", key="copy_user", use_container_width=True):
@@ -494,11 +486,13 @@ if st.session_state.show_step2:
         
         col_clear_final, col_copy_final = st.columns([1, 1])
         with col_clear_final:
-            if st.button("🗑️ Очистить промпт", key="clear_final", use_container_width=True):
-                st.session_state.final_prompt = ""
-                st.session_state.masked_prompt = ""
-                st.session_state.token_count = 0
-                st.rerun()
+            if st.button("🗑️ Очистить промпт", key="clear_final", use_container_width=True,
+                        on_click=lambda: st.session_state.update({
+                            'final_prompt': '', 
+                            'masked_prompt': '', 
+                            'token_count': 0
+                        })):
+                pass
         with col_copy_final:
             prompt_to_copy = st.session_state.masked_prompt if (st.session_state.enable_masking and st.session_state.masked_prompt) else st.session_state.final_prompt
             if prompt_to_copy:
@@ -618,15 +612,11 @@ if st.session_state.show_step3:
         
         llm_response_value = st.text_area(
             "Вставьте ответ LLM",
-            value=st.session_state.llm_response,
             height=200,
             placeholder="Вставьте сюда ответ от LLM...",
-            key='llm_response_input',
+            key='llm_response',
             label_visibility="collapsed"
         )
-        
-        # Обновляем значение в session_state
-        st.session_state.llm_response = llm_response_value
         
         col_unmask, col_clear_llm = st.columns([1, 1])
         with col_unmask:
@@ -645,10 +635,12 @@ if st.session_state.show_step3:
                     st.warning("⚠️ Введите ответ LLM")
         
         with col_clear_llm:
-            if st.button("🗑️ Очистить", key="clear_llm", use_container_width=True):
-                st.session_state.llm_response = ""
-                st.session_state.unmasked_response = ""
-                st.rerun()
+            if st.button("🗑️ Очистить", key="clear_llm", use_container_width=True,
+                        on_click=lambda: st.session_state.update({
+                            'llm_response': '', 
+                            'unmasked_response': ''
+                        })):
+                pass
 
     with col_llm_right:
         st.markdown("**Расшифрованный ответ**")
