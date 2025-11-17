@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import List, Dict, Tuple
 from pathlib import Path
-import streamlit.components.v1 as components # <-- ИСПРАВЛЕНИЕ 1: Явный импорт
+import streamlit.components.v1 as components
 
 # Добавляем путь к модулям проекта
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
