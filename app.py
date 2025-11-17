@@ -222,20 +222,16 @@ SELECT * FROM data WHERE query LIKE '%{user_query}%';
 # --- Функция для копирования в буфер ---
 def copy_to_clipboard(text: str, button_key: str):
     """Универсальная функция для копирования текста в буфер обмена"""
-    # <-- ИСПРАВЛЕНИЕ 1: Используем 'components' вместо 'st.components'
-    components.html(
-        f"""
+    st.write(f'<textarea id="{button_key}" style="position: absolute; left: -9999px;">{text}</textarea>', unsafe_allow_html=True)
+    components.html(f"""
         <script>
-            const text = {json.dumps(text)};
-            navigator.clipboard.writeText(text).then(function() {{
-                console.log('Copied to clipboard successfully!');
-            }}, function(err) {{
-                console.error('Could not copy text: ', err);
-            }});
+            var copyText = window.parent.document.getElementById("{button_key}");
+            if (copyText) {{
+                copyText.select();
+                window.parent.document.execCommand("copy");
+            }}
         </script>
-        """,
-        height=0,
-    )
+    """, height=0)
 
 # --- CSS для улучшения визуального оформления ---
 st.markdown("""
@@ -286,7 +282,7 @@ st.markdown("""
 
 # --- Основной интерфейс ---
 
-st.title("🔨 Prompt Builder с маскированием")
+st.title("🔨 Prompt Builder")
 
 # ========== ЭТАП 1: Системный промпт ==========
 step1_icon = "▼" if st.session_state.show_step1 else "▶"
