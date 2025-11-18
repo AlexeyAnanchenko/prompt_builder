@@ -237,56 +237,242 @@ def copy_to_clipboard(text: str, button_key: str):
 # --- CSS для улучшения визуального оформления ---
 st.markdown("""
 <style>
+    /* === ОБЩИЙ ФОН И БАЗОВЫЕ НАСТРОЙКИ === */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e8edf3 100%);
+    }
+    
+    /* === АНИМИРОВАННЫЙ ЗАГОЛОВОК === */
+    .animated-title {
+        text-align: center;
+        font-size: 3em;
+        font-weight: 700;
+        color: #2d3748;
+        margin: 20px 0 30px 0;
+        user-select: none;
+    }
+    
+    .hammer-emoji {
+        display: inline-block;
+        font-size: 1.2em;
+        margin-right: 15px;
+        cursor: pointer;
+        transform-origin: bottom right;
+    }
+    
+    /* Анимация молотка */
+    @keyframes hammer-swing {
+        0% { transform: rotate(0deg); }
+        15% { transform: rotate(-35deg); }
+        30% { transform: rotate(25deg); }
+        45% { transform: rotate(-20deg); }
+        60% { transform: rotate(15deg); }
+        75% { transform: rotate(-10deg); }
+        90% { transform: rotate(5deg); }
+        100% { transform: rotate(0deg); }
+    }
+    
+    .hammer-animate {
+        animation: hammer-swing 0.8s ease-in-out;
+    }
+    
+    /* Градиентный текст для заголовка */
+    .title-text {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    /* Уменьшаем отступы между колонками */
     div[data-testid="column"] {
         padding: 0 5px !important;
     }
     
+    /* Все кнопки на всю ширину */
     .stButton button {
         width: 100%;
     }
     
-    /* СНАЧАЛА зеленые стили для этапов */
+    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) - Мягкий синий === */
     button[kind="primary"] {
-        background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%) !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
         border: none !important;
         padding: 15px 20px !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         font-size: 1.1em !important;
-        font-weight: bold !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25) !important;
         transition: all 0.3s ease !important;
         margin: 20px 0 15px 0 !important;
+        letter-spacing: 0.3px;
     }
     
     button[kind="primary"]:hover {
-        background: linear-gradient(90deg, #45a049 0%, #4CAF50 100%) !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-        transform: translateY(-2px);
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+        transform: translateY(-3px) scale(1.01);
     }
     
-    /* ПОТОМ красные - они переопределят для кнопок в колонках */
+    /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) - Коралловый === */
     .stColumn button[kind="primary"],
     .stColumn .stButton button[kind="primary"] {
-        background: linear-gradient(90deg, #ff4b4b 0%, #ff3333 100%) !important;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
         margin: 0 !important;
-        padding: 0.5rem 1rem !important;
+        padding: 0.6rem 1.2rem !important;
         font-size: 1rem !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 3px 12px rgba(245, 87, 108, 0.25) !important;
+        letter-spacing: 0.2px;
     }
     
-    .stColumn button[kind="primary"]:hover,
-    .stColumn .stButton button[kind="primary"]:hover {
-        background: linear-gradient(90deg, #ff3333 0%, #ff1a1a 100%) !important;
-        box-shadow: 0 2px 6px rgba(255, 75, 75, 0.4) !important;
-        transform: translateY(-1px) !important;
+    .stColumn button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%) !important;
+        box-shadow: 0 5px 18px rgba(245, 87, 108, 0.4) !important;
+        transform: translateY(-2px) scale(1.02) !important;
     }
+    
+    /* === ОБЫЧНЫЕ КНОПКИ (Очистить, Копировать и т.д.) - Нейтральные === */
+    button[kind="secondary"] {
+        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%) !important;
+        color: #4a5568 !important;
+        border: 1px solid #e2e8f0 !important;
+        font-weight: 500 !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    button[kind="secondary"]:hover {
+        background: linear-gradient(135deg, #ebedee 0%, #fdfbfb 100%) !important;
+        border-color: #cbd5e0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+        transform: translateY(-1px);
+    }
+    
+    /* === ТЕКСТОВЫЕ ОБЛАСТИ === */
+    .stTextArea textarea {
+        border-radius: 10px !important;
+        border: 2px solid #e2e8f0 !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextArea textarea:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    }
+    
+    /* === СЕЛЕКТЫ === */
+    .stSelectbox > div > div {
+        border-radius: 10px !important;
+        border: 2px solid #e2e8f0 !important;
+        background: white !important;
+    }
+    
+    /* === ЧЕКБОКСЫ === */
+    .stCheckbox {
+        background: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* === EXPANDER === */
+    .streamlit-expanderHeader {
+        background: white !important;
+        border-radius: 10px !important;
+        border: 1px solid #e2e8f0 !important;
+        font-weight: 500 !important;
+    }
+    
+    /* === ПРОГРЕСС БАР === */
+    .stProgress > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        border-radius: 10px !important;
+    }
+    
+    /* === ЗАГОЛОВКИ === */
+    h1, h2, h3 {
+        color: #2d3748 !important;
+        font-weight: 700 !important;
+    }
+    
+    /* === МЕТРИКИ В САЙДБАРЕ === */
+    [data-testid="stMetricValue"] {
+        color: #667eea !important;
+        font-weight: 600 !important;
+    }
+    
+    /* === САЙДБАР === */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%) !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
 # --- Основной интерфейс ---
 
-st.title("🔨 Prompt Builder")
+components.html("""
+<style>
+    .animated-title {
+        text-align: center;
+        font-size: 3em;
+        font-weight: 700;
+        color: #2d3748;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+        font-family: "Source Sans Pro", sans-serif;
+    }
+    
+    .hammer-emoji {
+        display: inline-block;
+        font-size: 1.2em;
+        margin-right: 15px;
+        cursor: pointer;
+        transform-origin: bottom right;
+    }
+    
+    @keyframes hammer-swing {
+        0% { transform: rotate(0deg); }
+        15% { transform: rotate(-35deg); }
+        30% { transform: rotate(25deg); }
+        45% { transform: rotate(-20deg); }
+        60% { transform: rotate(15deg); }
+        75% { transform: rotate(-10deg); }
+        90% { transform: rotate(5deg); }
+        100% { transform: rotate(0deg); }
+    }
+    
+    .hammer-animate {
+        animation: hammer-swing 0.8s ease-in-out;
+    }
+    
+    .title-text {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+</style>
+
+<div class="animated-title">
+    <span class="hammer-emoji" id="hammer">🔨</span>
+    <span class="title-text">Prompt Builder</span>
+</div>
+
+<script>
+    document.getElementById('hammer').addEventListener('click', function() {
+        this.classList.add('hammer-animate');
+        setTimeout(() => {
+            this.classList.remove('hammer-animate');
+        }, 800);
+    });
+</script>
+""", height=100)
 
 # ========== ЭТАП 1: Системный промпт ==========
 step1_icon = "▼" if st.session_state.show_step1 else "▶"
