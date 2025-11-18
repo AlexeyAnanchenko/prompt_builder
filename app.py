@@ -234,12 +234,12 @@ def copy_to_clipboard(text: str, button_key: str):
         </script>
     """, height=0)
 
-# --- CSS для улучшения визуального оформления ---
+# --- CSS для улучшения визуального оформления (спокойная цветовая схема) ---
 st.markdown("""
 <style>
     /* === ОБЩИЙ ФОН И БАЗОВЫЕ НАСТРОЙКИ === */
     .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e8edf3 100%);
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     }
     
     /* Уменьшаем отступы между колонками */
@@ -252,80 +252,80 @@ st.markdown("""
         width: 100%;
     }
     
-    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) - Мягкий синий === */
+    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) - Спокойный синий === */
     button[kind="primary"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
         color: white !important;
         border: none !important;
         padding: 15px 20px !important;
         border-radius: 12px !important;
         font-size: 1.1em !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25) !important;
+        box-shadow: 0 3px 12px rgba(90, 127, 184, 0.2) !important;
         transition: all 0.3s ease !important;
         margin: 20px 0 15px 0 !important;
         letter-spacing: 0.3px;
     }
     
     button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
-        transform: translateY(-3px) scale(1.01);
+        background: linear-gradient(135deg, #4a6fa0 0%, #5a7fb8 100%) !important;
+        box-shadow: 0 5px 16px rgba(90, 127, 184, 0.3) !important;
+        transform: translateY(-2px) scale(1.01);
     }
     
-    /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) - Коралловый === */
+    /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) - Спокойный красный === */
     .stColumn button[kind="primary"],
     .stColumn .stButton button[kind="primary"] {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+        background: #ff3b3b 0% !important;
         margin: 0 !important;
         padding: 0.6rem 1.2rem !important;
         font-size: 1rem !important;
         font-weight: 600 !important;
         border-radius: 10px !important;
-        box-shadow: 0 3px 12px rgba(245, 87, 108, 0.25) !important;
+        box-shadow: 0 2px 10px rgba(200, 90, 84, 0.25) !important;
         letter-spacing: 0.2px;
     }
     
     .stColumn button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%) !important;
-        box-shadow: 0 5px 18px rgba(245, 87, 108, 0.4) !important;
+        background: #fc2121 !important;
+        box-shadow: 0 4px 14px rgba(200, 90, 84, 0.35) !important;
         transform: translateY(-2px) scale(1.02) !important;
     }
     
-    /* === ОБЫЧНЫЕ КНОПКИ (Очистить, Копировать и т.д.) - Нейтральные === */
+    /* === ОБЫЧНЫЕ КНОПКИ (Очистить, Копировать и т.д.) - Слегка выделенные === */
     button[kind="secondary"] {
-        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%) !important;
-        color: #4a5568 !important;
-        border: 1px solid #e2e8f0 !important;
+        background: #f8f9fa !important;
+        color: #495057 !important;
+        border: 1.5px solid #adb5bd !important;
         font-weight: 500 !important;
         border-radius: 8px !important;
         transition: all 0.2s ease !important;
     }
     
     button[kind="secondary"]:hover {
-        background: linear-gradient(135deg, #ebedee 0%, #fdfbfb 100%) !important;
-        border-color: #cbd5e0 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+        background: #e9ecef !important;
+        border-color: #868e96 !important;
+        box-shadow: 0 2px 8px rgba(73, 80, 87, 0.12) !important;
         transform: translateY(-1px);
     }
     
     /* === ТЕКСТОВЫЕ ОБЛАСТИ === */
     .stTextArea textarea {
         border-radius: 10px !important;
-        border: 2px solid #e2e8f0 !important;
+        border: 2px solid #dee2e6 !important;
         background: white !important;
         transition: all 0.3s ease !important;
     }
     
     .stTextArea textarea:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
     }
     
     /* === СЕЛЕКТЫ === */
     .stSelectbox > div > div {
         border-radius: 10px !important;
-        border: 2px solid #e2e8f0 !important;
+        border: 2px solid #dee2e6 !important;
         background: white !important;
     }
     
@@ -334,38 +334,38 @@ st.markdown("""
         background: white;
         padding: 10px 15px;
         border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #dee2e6;
     }
     
     /* === EXPANDER === */
     .streamlit-expanderHeader {
         background: white !important;
         border-radius: 10px !important;
-        border: 1px solid #e2e8f0 !important;
+        border: 1px solid #dee2e6 !important;
         font-weight: 500 !important;
     }
     
     /* === ПРОГРЕСС БАР === */
     .stProgress > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(90deg, #5a7fb8 0%, #6b9d7d 100%) !important;
         border-radius: 10px !important;
     }
     
     /* === ЗАГОЛОВКИ === */
     h1, h2, h3 {
-        color: #2d3748 !important;
+        color: #343a40 !important;
         font-weight: 700 !important;
     }
     
     /* === МЕТРИКИ В САЙДБАРЕ === */
     [data-testid="stMetricValue"] {
-        color: #667eea !important;
+        color: #5a7fb8 !important;
         font-weight: 600 !important;
     }
     
     /* === САЙДБАР === */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%) !important;
+        background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%) !important;
     }
 
 </style>
@@ -380,7 +380,7 @@ components.html("""
         text-align: center;
         font-size: 3em;
         font-weight: 700;
-        color: #2d3748;
+        color: #343a40;
         margin: 0;
         padding: 0;
         user-select: none;
@@ -410,9 +410,9 @@ components.html("""
         animation: hammer-swing 0.8s ease-in-out;
     }
     
-    /* Градиентный текст для заголовка */
+    /* Спокойный градиентный текст для заголовка */
     .title-text {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #5a7fb8 0%, #6b9d7d 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
