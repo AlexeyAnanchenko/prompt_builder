@@ -242,48 +242,6 @@ st.markdown("""
         background: linear-gradient(135deg, #f5f7fa 0%, #e8edf3 100%);
     }
     
-    /* === АНИМИРОВАННЫЙ ЗАГОЛОВОК === */
-    .animated-title {
-        text-align: center;
-        font-size: 3em;
-        font-weight: 700;
-        color: #2d3748;
-        margin: 20px 0 30px 0;
-        user-select: none;
-    }
-    
-    .hammer-emoji {
-        display: inline-block;
-        font-size: 1.2em;
-        margin-right: 15px;
-        cursor: pointer;
-        transform-origin: bottom right;
-    }
-    
-    /* Анимация молотка */
-    @keyframes hammer-swing {
-        0% { transform: rotate(0deg); }
-        15% { transform: rotate(-35deg); }
-        30% { transform: rotate(25deg); }
-        45% { transform: rotate(-20deg); }
-        60% { transform: rotate(15deg); }
-        75% { transform: rotate(-10deg); }
-        90% { transform: rotate(5deg); }
-        100% { transform: rotate(0deg); }
-    }
-    
-    .hammer-animate {
-        animation: hammer-swing 0.8s ease-in-out;
-    }
-    
-    /* Градиентный текст для заголовка */
-    .title-text {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    
     /* Уменьшаем отступы между колонками */
     div[data-testid="column"] {
         padding: 0 5px !important;
@@ -415,6 +373,7 @@ st.markdown("""
 
 # --- Основной интерфейс ---
 
+# анимация заголовка!
 components.html("""
 <style>
     .animated-title {
@@ -451,6 +410,7 @@ components.html("""
         animation: hammer-swing 0.8s ease-in-out;
     }
     
+    /* Градиентный текст для заголовка */
     .title-text {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
