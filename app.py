@@ -276,7 +276,7 @@ st.markdown("""
     /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) - Спокойный красный === */
     .stColumn button[kind="primary"],
     .stColumn .stButton button[kind="primary"] {
-        background: #ff3b3b 0% !important;
+        background: #35a85b 0% !important;
         margin: 0 !important;
         padding: 0.6rem 1.2rem !important;
         font-size: 1rem !important;
@@ -287,7 +287,7 @@ st.markdown("""
     }
     
     .stColumn button[kind="primary"]:hover {
-        background: #fc2121 !important;
+        background: #298146 !important;
         box-shadow: 0 4px 14px rgba(200, 90, 84, 0.35) !important;
         transform: translateY(-2px) scale(1.02) !important;
     }
