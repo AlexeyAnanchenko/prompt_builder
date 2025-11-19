@@ -234,7 +234,7 @@ def copy_to_clipboard(text: str, button_key: str):
         </script>
     """, height=0)
 
-# --- CSS для улучшения визуального оформления (спокойная цветовая схема) ---
+# --- CSS для улучшения визуального оформлени ---
 st.markdown("""
 <style>
     /* === ОБЩИЙ ФОН И БАЗОВЫЕ НАСТРОЙКИ === */
@@ -252,7 +252,7 @@ st.markdown("""
         width: 100%;
     }
     
-    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) - Спокойный синий === */
+    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) === */
     button[kind="primary"] {
         background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
         color: white !important;
@@ -273,7 +273,7 @@ st.markdown("""
         transform: translateY(-2px) scale(1.01);
     }
     
-    /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) - Спокойный красный === */
+    /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) === */
     .stColumn button[kind="primary"],
     .stColumn .stButton button[kind="primary"] {
         background: #35a85b 0% !important;
@@ -292,7 +292,7 @@ st.markdown("""
         transform: translateY(-2px) scale(1.02) !important;
     }
     
-    /* === ОБЫЧНЫЕ КНОПКИ (Очистить, Копировать и т.д.) - Слегка выделенные === */
+    /* === ОБЫЧНЫЕ КНОПКИ (Очистить, Копировать и т.д.) === */
     button[kind="secondary"] {
         background: #f8f9fa !important;
         color: #495057 !important;
@@ -410,7 +410,6 @@ components.html("""
         animation: hammer-swing 0.8s ease-in-out;
     }
     
-    /* Спокойный градиентный текст для заголовка */
     .title-text {
         background: linear-gradient(135deg, #5a7fb8 0%, #6b9d7d 100%);
         -webkit-background-clip: text;
@@ -455,10 +454,12 @@ if st.session_state.show_step1:
             with tab1:
                 col_save_name, col_save_btn = st.columns([4, 1])
                 with col_save_name:
+                    st.markdown('<p style="font-size: 18px; margin-bottom: 5px;">Название версии</p>', unsafe_allow_html=True)
                     save_name = st.text_input(
                         "Название версии",
                         placeholder="Например: Версия для SQL генерации",
-                        key="save_version_name"
+                        key="save_version_name",
+                        label_visibility="collapsed"  # скрываем стандартный заголовок
                     )
                 with col_save_btn:
                     st.write("")
