@@ -1,11 +1,17 @@
+import os
+from dotenv import load_dotenv
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict
+
+
+# Загружаем переменные из .env
+load_dotenv()
 
 # Пути к файлам
-VERSIONS_FILE = Path("prompt_versions.json")
+VERSIONS_FILE: Path = Path("prompt_versions.json")
 
 # Конфигурация страницы
-PAGE_CONFIG: Dict[str, Any] = {
+PAGE_CONFIG: Dict = {
     "page_title": "Prompt Builder",
     "page_icon": "🔨",
     "layout": "wide",
@@ -13,18 +19,18 @@ PAGE_CONFIG: Dict[str, Any] = {
 }
 
 # Лимиты токенов
-MAX_TOKENS = 128000
-TOKEN_MULTIPLIER = 1.3  # Для упрощённого подсчёта
+MAX_TOKENS: int = 128000
+TOKEN_MULTIPLIER: float = 1.3  # Для упрощённого подсчёта
 
 # UI константы
-TEXTAREA_HEIGHTS = {
+TEXTAREA_HEIGHTS: Dict[str, int] = {
     "system_prompt": 150,
     "user_query": 400,
     "llm_response": 200,
 }
 
 # Сообщения
-MESSAGES = {
+MESSAGES: Dict[str, str] = {
     "error_no_query": "⛔ Пожалуйста, введите запрос",
     "error_no_mapping": "⚠️ Нет словаря для расшифровки. Сначала сгенерируйте замаскированный промпт.",
     "error_no_llm_response": "⚠️ Введите ответ LLM",
@@ -40,3 +46,28 @@ MESSAGES = {
     "warning_enter_version_name": "⚠️ Введите название версии",
     "toast_copied": "✅ Скопировано!",
 }
+
+class DatabaseConfig:
+    """Конфигурация базы данных"""
+    
+    HOST = os.getenv("DB_HOST", "localhost")
+    PORT = int(os.getenv("DB_PORT", "5432"))
+    USER = os.getenv("DB_USER", "postgres")
+    PASSWORD = os.getenv("DB_PASSWORD")
+    NAME = os.getenv("DB_NAME", "query_db")
+    
+    POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
+    POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
+    
+    @classmethod
+    def get_connection_string(cls) -> str:
+        """Возвращает строку подключения к БД"""
+        return f"postgresql://{cls.USER}:{cls.PASSWORD}@{cls.HOST}:{cls.PORT}/{cls.NAME}"
+    
+    @classmethod
+    def validate(cls):
+        """Проверяет наличие обязательных параметров"""
+        if not cls.PASSWORD:
+            raise ValueError("DB_PASSWORD не установлен в переменных окружения")
+        if not cls.NAME:
+            raise ValueError("DB_NAME не установлен в переменных окружения")

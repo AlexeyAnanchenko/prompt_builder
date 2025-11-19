@@ -14,11 +14,14 @@ class VersionManager:
     """Менеджер версий системных промптов"""
     
     def __init__(self, file_path: Path = VERSIONS_FILE):
+
         self.file_path = file_path
         logger.info(f"VersionManager инициализирован с файлом: {file_path}")
     
+
     def load_versions(self) -> Dict:
         """Загружает версии промптов из файла"""
+
         logger.info(f"Попытка загрузки версий из файла: {self.file_path}")
         
         if not self.file_path.exists():
@@ -40,9 +43,11 @@ class VersionManager:
         except Exception as e:
             logger.error(f"Ошибка загрузки версий: {str(e)}")
             raise IOError(f"Ошибка загрузки версий: {str(e)}")
-    
+
+
     def save_versions(self, versions: Dict) -> None:
         """Сохраняет версии промптов в файл"""
+
         logger.info(f"Сохранение {len(versions)} версий в файл: {self.file_path}")
         
         try:
@@ -52,7 +57,8 @@ class VersionManager:
         except Exception as e:
             logger.error(f"Ошибка сохранения версий: {str(e)}")
             raise IOError(f"Ошибка сохранения версий: {str(e)}")
-    
+
+
     def save_version(
         self,
         versions: Dict,
@@ -70,6 +76,7 @@ class VersionManager:
         Returns:
             Dict: Обновлённый словарь версий
         """
+
         logger.info(f"Сохранение версии '{version_name}' с промптом длиной {len(prompt_text)} символов")
         
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
