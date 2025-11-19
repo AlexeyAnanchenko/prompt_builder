@@ -1,5 +1,10 @@
 from typing import Optional
 import streamlit.components.v1 as components
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def count_tokens(text: str) -> int:
@@ -13,7 +18,9 @@ def count_tokens(text: str) -> int:
         Примерное количество токенов
     """
     from config.settings import TOKEN_MULTIPLIER
-    return int(len(text.split()) * TOKEN_MULTIPLIER)
+    token_count = int(len(text.split()) * TOKEN_MULTIPLIER)
+    logger.debug(f"Подсчёт токенов: {len(text.split())} слов → {token_count} токенов")
+    return token_count
 
 
 def copy_to_clipboard(text: str, button_key: str) -> None:
@@ -24,6 +31,7 @@ def copy_to_clipboard(text: str, button_key: str) -> None:
         text: Текст для копирования
         button_key: Уникальный ключ для элемента
     """
+    logger.info(f"Копирование текста длиной {len(text)} символов в буфер обмена (ключ: {button_key})")
     import streamlit as st
     
     st.write(
@@ -39,6 +47,7 @@ def copy_to_clipboard(text: str, button_key: str) -> None:
             }}
         </script>
     """, height=0)
+    logger.info("Текст успешно скопирован в буфер обмена")
 
 
 def safe_strip(value: Optional[str]) -> str:
@@ -51,4 +60,6 @@ def safe_strip(value: Optional[str]) -> str:
     Returns:
         Обрезанная строка или пустая строка
     """
-    return (value or "").strip()
+    result = (value or "").strip()
+    logger.debug(f"Безопасная обрезка: '{value}' → '{result}'")
+    return result

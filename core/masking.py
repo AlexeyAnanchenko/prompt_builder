@@ -1,4 +1,9 @@
 from typing import Dict, Tuple
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 class MaskingService:
@@ -17,6 +22,8 @@ class MaskingService:
             Tuple[str, Dict[str, str]]: (замаскированный_текст, словарь_замен)
             где словарь_замен = {маска: оригинальное_значение}
         """
+        logger.info(f"Начало маскирования текста длиной {len(text)} символов")
+        
         masked_text = text
         mapping: Dict[str, str] = {}
         
@@ -27,6 +34,7 @@ class MaskingService:
         #     "MASK_002": "original_value_2"
         # }
         
+        logger.info(f"Маскирование завершено. Создано {len(mapping)} замен")
         return masked_text, mapping
     
     def unmask_text(self, text: str, mapping: Dict[str, str]) -> str:
@@ -42,10 +50,13 @@ class MaskingService:
         Returns:
             str: Расшифрованный текст
         """
+        logger.info(f"Начало расшифровки текста длиной {len(text)} символов с {len(mapping)} заменами")
+        
         unmasked_text = text
         
         # TODO: Реализовать твою логику расшифровки
         for mask, original in mapping.items():
             unmasked_text = unmasked_text.replace(mask, original)
         
+        logger.info("Расшифровка завершена")
         return unmasked_text

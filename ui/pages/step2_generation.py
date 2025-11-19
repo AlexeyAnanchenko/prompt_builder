@@ -10,10 +10,16 @@ from services.database import DatabaseManager
 from services.vector_store import VectorStoreManager
 from utils.helpers import count_tokens, safe_strip
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS, MAX_TOKENS
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def render_step2() -> None:
     """Рендерит шаг 2: Генерация промпта с контекстом"""
+    logger.info("Рендер шага 2: Генерация промпта с контекстом")
     render_step_toggle_button(
         step_number=2,
         title="Генерация промпта с контекстом",
@@ -21,6 +27,7 @@ def render_step2() -> None:
     )
     
     if not st.session_state.get('show_step2', True):
+        logger.debug("Шаг 2 скрыт, пропускаем рендер")
         return
     
     # Настройки: namespace и маскирование
@@ -191,6 +198,7 @@ def _render_action_buttons() -> None:
 
 def _handle_rebuild_database() -> None:
     """Обработчик обновления векторной БД"""
+    logger.info(f"Обновление векторной БД для namespace: {st.session_state.selected_namespace}")
     with st.spinner('Обновление базы...'):
         try:
             db_manager = DatabaseManager()
@@ -199,19 +207,24 @@ def _handle_rebuild_database() -> None:
             data = db_manager.fetch_all_data_by_namespace(
                 st.session_state.selected_namespace
             )
+            logger.info(f"Получено {len(data)} записей для обновления БД")
             result = vector_manager.rebuild_database(
                 data,
                 st.session_state.selected_namespace
             )
             
+            logger.info(f"Векторная БД успешно обновлена: {result}")
             st.success(f"✅ Векторная база успешно обновлена! {result}")
         except Exception as e:
+            logger.error(f"Ошибка при обновлении векторной БД: {str(e)}")
             st.error(f"⛔ Ошибка при обновлении: {str(e)}")
 
 
 def _handle_generate_prompt() -> None:
     """Обработчик генерации промпта"""
+    logger.info("Начало генерации промпта")
     if not safe_strip(st.session_state.get('user_query')):
+        logger.warning("Попытка генерации промпта без пользовательского запроса")
         st.error(MESSAGES["error_no_query"])
         return
     
@@ -224,9 +237,11 @@ def _handle_generate_prompt() -> None:
                 st.session_state.user_query or "",
                 st.session_state.selected_namespace
             )
+            logger.info(f"Промпт сгенерирован. Длина: {len(st.session_state.final_prompt)} символов")
             
             # Маскируем при необходимости
             if st.session_state.enable_masking:
+                logger.info("Маскирование промпта включено")
                 masking_service = MaskingService()
                 masked, mapping = masking_service.mask_text(
                     st.session_state.final_prompt
@@ -236,12 +251,15 @@ def _handle_generate_prompt() -> None:
                 st.session_state.token_count = count_tokens(masked)
                 
                 if mapping:
+                    logger.info(f"Замаскировано {len(mapping)} элементов")
                     st.success(
                         MESSAGES["success_masked_elements"].format(len(mapping))
                     )
                 else:
+                    logger.info("Конфиденциальные данные не обнаружены")
                     st.info(MESSAGES["info_no_confidential"])
             else:
+                logger.info("Маскирование промпта отключено")
                 st.session_state.masked_prompt = ""
                 st.session_state.masking_dictionary = {}
                 st.session_state.token_count = count_tokens(
@@ -249,8 +267,10 @@ def _handle_generate_prompt() -> None:
                 )
                 st.success(MESSAGES["success_prompt_generated"])
             
+            logger.info("Генерация промпта завершена успешно")
             st.rerun()
         except Exception as e:
+            logger.error(f"Ошибка при генерации промпта: {str(e)}")
             st.error(f"⛔ Ошибка при генерации промпта: {str(e)}")
 
 

@@ -3,10 +3,16 @@ import streamlit.components.v1 as components
 from typing import Optional, Callable, Dict
 from utils.helpers import copy_to_clipboard
 from config.settings import MESSAGES
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def render_animated_header() -> None:
     """Рендерит анимированный заголовок приложения"""
+    logger.info("Рендер анимированного заголовка")
     components.html("""
 <style>
     .animated-title {
@@ -98,6 +104,7 @@ def render_button_pair(
         if text_to_copy:
             if st.button("📋 Копировать", key=copy_key, use_container_width=True):
                 copy_to_clipboard(text_to_copy, copy_key)
+                logger.info(f"Текст скопирован в буфер обмена (ключ: {copy_key})")
                 st.toast(MESSAGES["toast_copied"])
         else:
             st.button(

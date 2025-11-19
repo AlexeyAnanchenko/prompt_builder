@@ -1,8 +1,14 @@
 import streamlit as st
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def inject_custom_styles() -> None:
     """Применяет все кастомные CSS стили для приложения"""
+    logger.info("Применение кастомных CSS стилей")
     st.markdown("""
 <style>
     /* === ОБЩИЙ ФОН И БАЗОВЫЕ НАСТРОЙКИ === */

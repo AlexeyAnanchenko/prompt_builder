@@ -2,10 +2,16 @@ import streamlit as st
 from ui.components import render_step_toggle_button, render_button_pair
 from core.masking import MaskingService
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def render_step3() -> None:
     """Рендерит шаг 3: Расшифровка ответа LLM"""
+    logger.info("Рендер шага 3: Расшифровка ответа LLM")
     render_step_toggle_button(
         step_number=3,
         title="Расшифровка ответа LLM",
@@ -13,6 +19,7 @@ def render_step3() -> None:
     )
     
     if not st.session_state.get('show_step3', False):
+        logger.debug("Шаг 3 скрыт, пропускаем рендер")
         return
     
     # Две колонки: замаскированный ответ и расшифрованный
@@ -84,11 +91,14 @@ def _render_unmasked_response() -> None:
 
 def _handle_unmask() -> None:
     """Обработчик расшифровки ответа"""
+    logger.info("Начало расшифровки ответа LLM")
     if not st.session_state.get('llm_response'):
+        logger.warning("Попытка расшифровки без ответа LLM")
         st.warning(MESSAGES["error_no_llm_response"])
         return
     
     if not st.session_state.get('masking_dictionary'):
+        logger.warning("Попытка расшифровки без словаря замен")
         st.warning(MESSAGES["error_no_mapping"])
         return
     
@@ -98,7 +108,9 @@ def _handle_unmask() -> None:
             st.session_state.llm_response,
             st.session_state.masking_dictionary
         )
+        logger.info(f"Ответ успешно расшифрован. Длина: {len(st.session_state.unmasked_response)} символов")
         st.success(MESSAGES["success_unmasked"])
         st.rerun()
     except Exception as e:
+        logger.error(f"Ошибка при расшифровке ответа LLM: {str(e)}")
         st.error(f"⛔ Ошибка при расшифровке: {str(e)}")

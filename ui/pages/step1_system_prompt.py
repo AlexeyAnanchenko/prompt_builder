@@ -6,10 +6,16 @@ from ui.components import (
 )
 from core.version_manager import VersionManager
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def render_step1() -> None:
     """Рендерит шаг 1: Настройка системного промпта"""
+    logger.info("Рендер шага 1: Настройка системного промпта")
     render_step_toggle_button(
         step_number=1,
         title="Настройка системного промпта",
@@ -17,6 +23,7 @@ def render_step1() -> None:
     )
     
     if not st.session_state.get('show_step1', False):
+        logger.debug("Шаг 1 скрыт, пропускаем рендер")
         return
     
     version_manager = VersionManager()
@@ -39,6 +46,7 @@ def render_step1() -> None:
 
 def _render_save_version_tab(version_manager: VersionManager) -> None:
     """Рендерит таб сохранения версии"""
+    logger.debug("Рендер таба сохранения версии")
     col_save_name, col_save_btn = st.columns([4, 1])
     
     with col_save_name:
@@ -58,6 +66,7 @@ def _render_save_version_tab(version_manager: VersionManager) -> None:
         st.write("")
         if st.button("💾 Сохранить", use_container_width=True):
             if save_name and save_name.strip():
+                logger.info(f"Сохранение версии: '{save_name.strip()}'")
                 versions = version_manager.save_version(
                     st.session_state.prompt_versions,
                     save_name.strip(),
@@ -65,24 +74,31 @@ def _render_save_version_tab(version_manager: VersionManager) -> None:
                 )
                 st.session_state.prompt_versions = versions
                 st.session_state.current_version = save_name.strip()
+                logger.info(f"Версия '{save_name.strip()}' успешно сохранена")
                 st.success(MESSAGES["success_version_saved"].format(save_name))
                 st.rerun()
             else:
+                logger.warning("Попытка сохранения версии без названия")
                 st.warning(MESSAGES["warning_enter_version_name"])
 
 
 def _render_load_version_tab(version_manager: VersionManager) -> None:
     """Рендерит таб загрузки версий"""
+    logger.debug("Рендер таба загрузки версий")
     if st.session_state.prompt_versions:
+        logger.info(f"Отображение {len(st.session_state.prompt_versions)} сохранённых версий")
         for version_name, version_data in st.session_state.prompt_versions.items():
             action = render_version_preview(version_name, version_data)
             
             if action == "load":
+                logger.info(f"Загрузка версии: '{version_name}'")
                 st.session_state.system_prompt = version_data['prompt']
                 st.session_state.current_version = version_name
+                logger.info(f"Версия '{version_name}' успешно загружена")
                 st.success(MESSAGES["success_version_loaded"].format(version_name))
                 st.rerun()
             elif action == "delete":
+                logger.info(f"Удаление версии: '{version_name}'")
                 versions = version_manager.delete_version(
                     st.session_state.prompt_versions,
                     version_name
@@ -90,9 +106,11 @@ def _render_load_version_tab(version_manager: VersionManager) -> None:
                 st.session_state.prompt_versions = versions
                 if st.session_state.current_version == version_name:
                     st.session_state.current_version = None
+                logger.info(f"Версия '{version_name}' успешно удалена")
                 st.success(MESSAGES["success_version_deleted"].format(version_name))
                 st.rerun()
     else:
+        logger.info("Нет сохранённых версий для отображения")
         st.info(MESSAGES["info_no_versions"])
 
 

@@ -1,10 +1,16 @@
 import streamlit as st
 from typing import Any, Dict
 from core.version_manager import VersionManager
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
 
 
 def init_session_state() -> None:
     """Централизованная инициализация session_state"""
+    logger.info("Инициализация session_state")
     version_manager = VersionManager()
     
     defaults: Dict[str, Any] = {
@@ -32,21 +38,29 @@ def init_session_state() -> None:
         'enable_masking': True,
     }
     
+    initialized_keys = []
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+            initialized_keys.append(key)
+    
+    logger.info(f"Инициализировано {len(initialized_keys)} ключей в session_state: {initialized_keys}")
 
 
 def get_state(key: str, default: Any = None) -> Any:
     """Безопасное получение значения из session_state"""
-    return st.session_state.get(key, default)
+    value = st.session_state.get(key, default)
+    logger.debug(f"Получение значения из session_state: {key} = {value}")
+    return value
 
 
 def set_state(key: str, value: Any) -> None:
     """Установка значения в session_state"""
+    logger.debug(f"Установка значения в session_state: {key} = {value}")
     st.session_state[key] = value
 
 
 def update_state(updates: Dict[str, Any]) -> None:
     """Массовое обновление session_state"""
+    logger.debug(f"Массовое обновление session_state: {list(updates.keys())}")
     st.session_state.update(updates)

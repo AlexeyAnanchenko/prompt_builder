@@ -1,8 +1,15 @@
 from pathlib import Path
 from typing import Dict, Any
+from utils.logger import setup_logger
+
+
+# Настраиваем логгер для модуля
+logger = setup_logger(__name__)
+
 
 # Пути к файлам
 VERSIONS_FILE = Path("prompt_versions.json")
+logger.info(f"Файл версий: {VERSIONS_FILE}")
 
 # Конфигурация страницы
 PAGE_CONFIG: Dict[str, Any] = {
@@ -11,10 +18,12 @@ PAGE_CONFIG: Dict[str, Any] = {
     "layout": "wide",
     "initial_sidebar_state": "collapsed"
 }
+logger.info(f"Конфигурация страницы: {PAGE_CONFIG}")
 
 # Лимиты токенов
 MAX_TOKENS = 128000
 TOKEN_MULTIPLIER = 1.3  # Для упрощённого подсчёта
+logger.info(f"Лимит токенов: {MAX_TOKENS}, множитель: {TOKEN_MULTIPLIER}")
 
 # UI константы
 TEXTAREA_HEIGHTS = {
@@ -22,6 +31,7 @@ TEXTAREA_HEIGHTS = {
     "user_query": 400,
     "llm_response": 200,
 }
+logger.info(f"Высоты текстовых областей: {TEXTAREA_HEIGHTS}")
 
 # Сообщения
 MESSAGES = {
@@ -40,3 +50,4 @@ MESSAGES = {
     "warning_enter_version_name": "⚠️ Введите название версии",
     "toast_copied": "✅ Скопировано!",
 }
+logger.info("Сообщения приложения загружены")
