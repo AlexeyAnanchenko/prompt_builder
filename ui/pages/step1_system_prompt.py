@@ -1,0 +1,118 @@
+import streamlit as st
+from ui.components import (
+    render_step_toggle_button,
+    render_button_pair,
+    render_version_preview
+)
+from core.version_manager import VersionManager
+from config.settings import MESSAGES, TEXTAREA_HEIGHTS
+
+
+def render_step1() -> None:
+    """Рендерит шаг 1: Настройка системного промпта"""
+    render_step_toggle_button(
+        step_number=1,
+        title="Настройка системного промпта",
+        state_key='show_step1'
+    )
+    
+    if not st.session_state.get('show_step1', False):
+        return
+    
+    version_manager = VersionManager()
+    
+    # Панель управления версиями
+    with st.expander("📚 Управление версиями системного промпта", expanded=False):
+        tab_save, tab_load = st.tabs(["💾 Сохранить", "📂 Загрузить"])
+        
+        with tab_save:
+            _render_save_version_tab(version_manager)
+        
+        with tab_load:
+            _render_load_version_tab(version_manager)
+    
+    # Текстовая область для системного промпта
+    _render_system_prompt_textarea()
+    
+    st.markdown("---")
+
+
+def _render_save_version_tab(version_manager: VersionManager) -> None:
+    """Рендерит таб сохранения версии"""
+    col_save_name, col_save_btn = st.columns([4, 1])
+    
+    with col_save_name:
+        st.markdown(
+            '<p style="font-size: 18px; margin-bottom: 5px;">Название версии</p>',
+            unsafe_allow_html=True
+        )
+        save_name = st.text_input(
+            "Название версии",
+            placeholder="Например: Версия для SQL генерации",
+            key="save_version_name",
+            label_visibility="collapsed"
+        )
+    
+    with col_save_btn:
+        st.write("")
+        st.write("")
+        if st.button("💾 Сохранить", use_container_width=True):
+            if save_name and save_name.strip():
+                versions = version_manager.save_version(
+                    st.session_state.prompt_versions,
+                    save_name.strip(),
+                    st.session_state.system_prompt
+                )
+                st.session_state.prompt_versions = versions
+                st.session_state.current_version = save_name.strip()
+                st.success(MESSAGES["success_version_saved"].format(save_name))
+                st.rerun()
+            else:
+                st.warning(MESSAGES["warning_enter_version_name"])
+
+
+def _render_load_version_tab(version_manager: VersionManager) -> None:
+    """Рендерит таб загрузки версий"""
+    if st.session_state.prompt_versions:
+        for version_name, version_data in st.session_state.prompt_versions.items():
+            action = render_version_preview(version_name, version_data)
+            
+            if action == "load":
+                st.session_state.system_prompt = version_data['prompt']
+                st.session_state.current_version = version_name
+                st.success(MESSAGES["success_version_loaded"].format(version_name))
+                st.rerun()
+            elif action == "delete":
+                versions = version_manager.delete_version(
+                    st.session_state.prompt_versions,
+                    version_name
+                )
+                st.session_state.prompt_versions = versions
+                if st.session_state.current_version == version_name:
+                    st.session_state.current_version = None
+                st.success(MESSAGES["success_version_deleted"].format(version_name))
+                st.rerun()
+    else:
+        st.info(MESSAGES["info_no_versions"])
+
+
+def _render_system_prompt_textarea() -> None:
+    """Рендерит текстовую область для системного промпта"""
+    version_label = "📝 Системный промпт"
+    if st.session_state.get('current_version'):
+        version_label += f" (🟢 {st.session_state['current_version']})"
+    
+    st.text_area(
+        version_label,
+        height=TEXTAREA_HEIGHTS["system_prompt"],
+        placeholder="Введите системный промпт здесь...",
+        key='system_prompt',
+        help="Системный промпт будет добавлен в начало финального промпта"
+    )
+    
+    render_button_pair(
+        clear_key="clear_sys",
+        copy_key="copy_sys",
+        text_to_copy=st.session_state.get('system_prompt'),
+        clear_callback=lambda: st.session_state.update({'system_prompt': ''})
+    )
