@@ -14,38 +14,13 @@ logger = setup_logger(__name__, log_file='logs/app.log')
 
 def main():
     """Главная функция приложения"""
-    logger.info("=" * 50)
-    logger.info("Приложение Prompt Builder запущено")
-    logger.info("=" * 50)
-
-    # Настройка страницы
-    st.set_page_config(**PAGE_CONFIG)
-    
-    # Инициализация состояния
-    init_session_state()
-    
-    # Применение стилей
-    inject_custom_styles()
-    
-    # Заголовок с анимацией
-    render_animated_header()
-    
-    # Рендер трёх основных шагов
-    render_step1()
-    render_step2()
-    render_step3()
-    
-    # Сайдбар с информацией
-    render_sidebar_info()
 
     try:
         # Настройка страницы
         st.set_page_config(**PAGE_CONFIG)
-        logger.debug("Конфигурация страницы установлена")
         
         # Инициализация состояния
         init_session_state()
-        logger.debug("Session state инициализирован")
         
         # Рендер UI
         inject_custom_styles()
