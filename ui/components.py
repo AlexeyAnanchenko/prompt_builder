@@ -5,7 +5,6 @@ from utils.helpers import copy_to_clipboard
 from config.settings import MESSAGES
 from utils.logger import setup_logger
 
-
 # Настраиваем логгер для модуля
 logger = setup_logger(__name__)
 
@@ -81,12 +80,6 @@ def render_button_pair(
 ) -> None:
     """
     Рендерит пару кнопок Очистить/Копировать
-    
-    Args:
-        clear_key: Ключ для кнопки очистки
-        copy_key: Ключ для кнопки копирования
-        text_to_copy: Текст для копирования (если None - кнопка неактивна)
-        clear_callback: Callback для кнопки очистки
     """
     col_clear, col_copy = st.columns([1, 1])
     
@@ -122,14 +115,19 @@ def render_step_toggle_button(
 ) -> None:
     """
     Рендерит кнопку переключения видимости шага
-    
-    Args:
-        step_number: Номер шага (1, 2, 3)
-        title: Заголовок шага
-        state_key: Ключ в session_state для хранения состояния
     """
     icon = "▼" if st.session_state.get(state_key, False) else "▶"
-    emoji = ["1️⃣", "2️⃣", "3️⃣"][step_number - 1]
+    
+    # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    # Расширенный список эмодзи, чтобы не вылетала ошибка при step_number=4
+    emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    
+    # Безопасное получение эмодзи
+    if 0 <= step_number - 1 < len(emojis):
+        emoji = emojis[step_number - 1]
+    else:
+        emoji = f"#{step_number}" # Fallback, если шагов будет больше 10
+    # -------------------------
     
     if st.button(
         f'{emoji} {title} {icon}',
@@ -144,10 +142,6 @@ def render_step_toggle_button(
 def render_token_counter(token_count: int, max_tokens: int) -> None:
     """
     Рендерит счётчик токенов с прогресс-баром
-    
-    Args:
-        token_count: Текущее количество токенов
-        max_tokens: Максимальное количество токенов
     """
     progress = min(token_count / max_tokens, 1.0)
     
@@ -162,13 +156,13 @@ def render_sidebar_info() -> None:
     """Рендерит информацию в сайдбаре"""
     st.sidebar.markdown("### 📊 О приложении")
     st.sidebar.info("""
-**Prompt Builder v1.0**
+**Prompt Builder v2.0**
 
 Приложение для построения промптов с:
 - 📚 Версионированием системных промптов
-- 🔍 Контекстным поиском (RAG) по запросу клиента
+- 🧙‍♂️ Генерацией SQL-контекста
 - 🎭 Маскированием конфиденциальных данных
-- 🔓 Обратной расшифровкой замаскированного текста в ответах LLM
+- 🔓 Обратной расшифровкой ответов
 """)
     
     st.sidebar.markdown("### 📈 Статистика")
@@ -179,10 +173,6 @@ def render_sidebar_info() -> None:
     st.sidebar.metric(
         "Длина системного промпта (символов):",
         f"{len(st.session_state.get('system_prompt', '') or '')}"
-    )
-    st.sidebar.metric(
-        "Длина запроса (символов):",
-        f"{len(st.session_state.get('user_query', '') or '')}"
     )
     st.sidebar.metric(
         "Токенов в финальном промпте:",
@@ -199,24 +189,11 @@ def render_sidebar_info() -> None:
         st.sidebar.success(
             f"🟢 Активная версия: {st.session_state['current_version']}"
         )
-    
-    # Показываем текущий словарь маскирования
-    if st.session_state.get('masking_dictionary'):
-        with st.sidebar.expander("🔐 Текущий словарь замен"):
-            for mask, original in st.session_state['masking_dictionary'].items():
-                st.text(f"{mask} → {original}")
 
 
 def render_version_preview(version_name: str, version_data: Dict) -> Optional[str]:
     """
     Рендерит превью версии промпта
-    
-    Args:
-        version_name: Название версии
-        version_data: Данные версии
-        
-    Returns:
-        Optional[str]: "load" или "delete" если нажата кнопка, иначе None
     """
     col_info, col_actions = st.columns([3, 1])
     

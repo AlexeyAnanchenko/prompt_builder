@@ -107,16 +107,66 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Ошибка получения namespace: {e}")
             return []
+    
+    
+    def fetch_namespace_context(self, namespace_id: str) -> dict:
+        """
+        Выгружает данные строго для указанного namespace_id.
+        """
+        logger.info(f"Загрузка контекста для namespace: {namespace_id}")
+        context_data = {}
+        
+        # 1. Таблицы, которые содержат данные конкретного неймспейса
+        # (Составлено на основе твоего DDL)
+        namespace_tables = [
+            'namespaces', # Грузим только текущий namespace
+            'clients',
+            'entities', 
+            'composed_entities', 
+            'entity_properties',
+            'tables', 
+            'table_fields', 
+            'parameters', 
+            'constraints', 
+            'composed_constraints',
+            'vertices', 
+            'vertex_functions', 
+            'edges', 
+            'filters',
+            'datasets',
+            'aggregation', 
+            'limitation', 
+            'ordering', 
+            'group_by', 
+            'order_by'
+        ]
+        
+        # 2. Глобальные таблицы (справочники без namespace_id)
+        global_tables = [
+            'tenants'
+        ]
 
+        try:
+            with self.get_cursor() as cursor:
+                # А. Грузим глобальные данные (tenants)
+                for table in global_tables:
+                    query = f"SELECT * FROM qe_config.{table}"
+                    cursor.execute(query)
+                    context_data[table] = cursor.fetchall()
 
-    def fetch_all_data_by_namespace(self, namespace: str) -> List[dict]:
-        """Получает все данные по namespace"""
-
-        logger.info(f"Получение данных для namespace: {namespace}")
-        # TODO: Заменить на реальную логику выборки данных из БД
-        data = [{"id": 1, "content": f"Sample data from {namespace}"}]
-        logger.info(f"Получено {len(data)} записей для namespace {namespace}")
-        return data
+                # Б. Грузим данные, отфильтрованные по namespace
+                for table in namespace_tables:
+                    # Для самой таблицы namespaces тоже фильтруем, чтобы взять только описание текущего
+                    query = f"SELECT * FROM qe_config.{table} WHERE namespace_id = %s"
+                    cursor.execute(query, (namespace_id,))
+                    context_data[table] = cursor.fetchall()
+                    
+            logger.info(f"Контекст загружен. Таблиц: {len(context_data)}")
+            return context_data
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки контекста namespace {namespace_id}: {e}")
+            raise e
     
 
     def close_all_connections(self):
