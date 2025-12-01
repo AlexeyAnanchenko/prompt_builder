@@ -142,25 +142,21 @@ def _render_system_prompt_textarea() -> None:
         """Копируем из виджета в 'вечное' хранилище"""
         st.session_state.system_prompt = st.session_state.sys_prompt_widget
 
-    # Виджет
+    # ✅ УБИРАЕМ value=, оставляем только key=
+    # Streamlit автоматически использует st.session_state.sys_prompt_widget
     st.text_area(
         version_label,
-        # ЗНАЧЕНИЕ берется из вечного хранилища
-        value=st.session_state.system_prompt, 
+        # ❌ УДАЛИТЕ ЭТУ СТРОКУ: value=st.session_state.get('sys_prompt_widget', st.session_state.system_prompt),
         height=TEXTAREA_HEIGHTS["system_prompt"],
         placeholder="Введите системный промпт здесь...",
-        # КЛЮЧ виджета уникален (не совпадает с переменной данных)
-        key='sys_prompt_widget', 
-        # ПРИ ИЗМЕНЕНИИ обновляем данные
+        key='sys_prompt_widget',  # ✅ Только key, БЕЗ value
         on_change=on_text_change,
         help="Этот текст будет добавлен в начало финального промпта"
     )
     
     def clear_sys_prompt():
         st.session_state.system_prompt = ""
-        # ✅ ДОБАВЬТЕ синхронизацию виджета
         st.session_state.sys_prompt_widget = ""
-        # Rerun нужен, чтобы обновить value в виджете
     
     # Кнопки
     render_button_pair(
