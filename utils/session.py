@@ -32,8 +32,8 @@ def init_session_state() -> None:
         'prompt_versions': version_manager.load_versions(),
         
         # UI состояния
-        'show_step1': False,
-        'show_step2': True,
+        'show_step1': True,
+        'show_step2': False,
         'show_step3': False,
         'enable_masking': True,
     }

@@ -8,7 +8,7 @@ from ui.components import render_animated_header, render_sidebar_info
 # Импорт страниц
 from ui.pages.step1_system_prompt import render_step1
 from ui.pages.step2_context import render_step2
-from ui.pages.step3_chat import render_step3  # <--- ИЗМЕНЕНИЕ ЗДЕСЬ
+from ui.pages.step3_chat import render_step3
 
 logger = setup_logger(__name__, log_file='logs/app.log')
 

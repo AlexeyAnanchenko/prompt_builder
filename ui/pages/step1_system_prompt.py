@@ -8,27 +8,45 @@ from core.version_manager import VersionManager
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS
 from utils.logger import setup_logger
 
-
-# Настраиваем логгер для модуля
 logger = setup_logger(__name__)
-
 
 def render_step1() -> None:
     """Рендерит шаг 1: Настройка системного промпта"""
     logger.info("Рендер шага 1: Настройка системного промпта")
+    
+    # ✅ ОБРАБОТКА ОТЛОЖЕННОЙ ЗАГРУЗКИ ВЕРСИИ
+    if '_pending_version_load' in st.session_state:
+        pending = st.session_state._pending_version_load
+        st.session_state.system_prompt = pending['prompt']
+        st.session_state.current_version = pending['name']
+        st.session_state.sys_prompt_widget = pending['prompt']
+        st.session_state.save_version_ui_input = pending['name']
+        
+        # Удаляем флаг
+        del st.session_state._pending_version_load
+        st.success(MESSAGES["success_version_loaded"].format(pending['name']))
+    
+    # 1. Инициализация ХРАНИЛИЩА ДАННЫХ
+    if 'system_prompt' not in st.session_state:
+        st.session_state.system_prompt = ""
+    if 'current_version' not in st.session_state:
+        st.session_state.current_version = ""
+    if 'sys_prompt_widget' not in st.session_state:
+        st.session_state.sys_prompt_widget = st.session_state.system_prompt
+    if 'save_version_ui_input' not in st.session_state:
+        st.session_state.save_version_ui_input = st.session_state.get('current_version', '')
+
     render_step_toggle_button(
         step_number=1,
         title="Настройка системного промпта",
         state_key='show_step1'
     )
     
-    if not st.session_state.get('show_step1', False):
-        logger.debug("Шаг 1 скрыт, пропускаем рендер")
+    if not st.session_state.get('show_step1', True):
         return
     
     version_manager = VersionManager()
     
-    # Панель управления версиями
     with st.expander("📚 Управление версиями системного промпта", expanded=False):
         tab_save, tab_load = st.tabs(["💾 Сохранить", "📂 Загрузить"])
         
@@ -38,26 +56,27 @@ def render_step1() -> None:
         with tab_load:
             _render_load_version_tab(version_manager)
     
-    # Текстовая область для системного промпта
     _render_system_prompt_textarea()
     
     st.markdown("---")
 
 
 def _render_save_version_tab(version_manager: VersionManager) -> None:
-    """Рендерит таб сохранения версии"""
-    logger.debug("Рендер таба сохранения версии")
     col_save_name, col_save_btn = st.columns([4, 1])
     
     with col_save_name:
-        st.markdown(
-            '<p style="font-size: 18px; margin-bottom: 5px;">Название версии</p>',
-            unsafe_allow_html=True
-        )
-        save_name = st.text_input(
+        st.markdown('<p style="font-size: 18px; margin-bottom: 5px;">Название версии</p>', unsafe_allow_html=True)
+        
+        # ✅ КРИТИЧНО: Инициализируем ключ ДО создания виджета
+        if 'save_version_ui_input' not in st.session_state:
+            st.session_state.save_version_ui_input = st.session_state.get('current_version', '')
+        
+        # ❌ УДАЛИТЕ параметр value= полностью!
+        # Streamlit автоматически использует st.session_state.save_version_ui_input
+        st.text_input(
             "Название версии",
-            placeholder="Например: Версия для SQL генерации",
-            key="save_version_name",
+            placeholder="Например: v1.0",
+            key="save_version_ui_input",  # <-- Только key, БЕЗ value!
             label_visibility="collapsed"
         )
     
@@ -65,72 +84,88 @@ def _render_save_version_tab(version_manager: VersionManager) -> None:
         st.write("")
         st.write("")
         if st.button("💾 Сохранить", use_container_width=True):
+            current_prompt = st.session_state.system_prompt
+            save_name = st.session_state.save_version_ui_input  # Читаем из session_state
+            
             if save_name and save_name.strip():
-                logger.info(f"Сохранение версии: '{save_name.strip()}'")
+                if not current_prompt:
+                    st.warning("Нельзя сохранить пустой промпт.")
+                    return
+                
                 versions = version_manager.save_version(
                     st.session_state.prompt_versions,
                     save_name.strip(),
-                    st.session_state.system_prompt
+                    current_prompt
                 )
                 st.session_state.prompt_versions = versions
                 st.session_state.current_version = save_name.strip()
-                logger.info(f"Версия '{save_name.strip()}' успешно сохранена")
                 st.success(MESSAGES["success_version_saved"].format(save_name))
                 st.rerun()
             else:
-                logger.warning("Попытка сохранения версии без названия")
                 st.warning(MESSAGES["warning_enter_version_name"])
 
 
 def _render_load_version_tab(version_manager: VersionManager) -> None:
-    """Рендерит таб загрузки версий"""
-    logger.debug("Рендер таба загрузки версий")
     if st.session_state.prompt_versions:
-        logger.info(f"Отображение {len(st.session_state.prompt_versions)} сохранённых версий")
         for version_name, version_data in st.session_state.prompt_versions.items():
             action = render_version_preview(version_name, version_data)
             
             if action == "load":
-                logger.info(f"Загрузка версии: '{version_name}'")
-                st.session_state.system_prompt = version_data['prompt']
-                st.session_state.current_version = version_name
-                logger.info(f"Версия '{version_name}' успешно загружена")
-                st.success(MESSAGES["success_version_loaded"].format(version_name))
+                # ✅ ИСПОЛЬЗУЕМ СПЕЦИАЛЬНЫЙ ФЛАГ для отложенного обновления
+                st.session_state._pending_version_load = {
+                    'name': version_name,
+                    'prompt': version_data['prompt']
+                }
                 st.rerun()
+                
             elif action == "delete":
-                logger.info(f"Удаление версии: '{version_name}'")
-                versions = version_manager.delete_version(
-                    st.session_state.prompt_versions,
-                    version_name
-                )
+                versions = version_manager.delete_version(st.session_state.prompt_versions, version_name)
                 st.session_state.prompt_versions = versions
                 if st.session_state.current_version == version_name:
-                    st.session_state.current_version = None
-                logger.info(f"Версия '{version_name}' успешно удалена")
+                    st.session_state.current_version = ""
                 st.success(MESSAGES["success_version_deleted"].format(version_name))
                 st.rerun()
     else:
-        logger.info("Нет сохранённых версий для отображения")
         st.info(MESSAGES["info_no_versions"])
 
 
 def _render_system_prompt_textarea() -> None:
-    """Рендерит текстовую область для системного промпта"""
+    """Рендерит текстовую область"""
+    
     version_label = "📝 Системный промпт"
     if st.session_state.get('current_version'):
         version_label += f" (🟢 {st.session_state['current_version']})"
     
+    # --- СИНХРОНИЗАЦИЯ UI <-> DATA ---
+    
+    def on_text_change():
+        """Копируем из виджета в 'вечное' хранилище"""
+        st.session_state.system_prompt = st.session_state.sys_prompt_widget
+
+    # Виджет
     st.text_area(
         version_label,
+        # ЗНАЧЕНИЕ берется из вечного хранилища
+        value=st.session_state.system_prompt, 
         height=TEXTAREA_HEIGHTS["system_prompt"],
         placeholder="Введите системный промпт здесь...",
-        key='system_prompt',
-        help="Системный промпт будет добавлен в начало финального промпта"
+        # КЛЮЧ виджета уникален (не совпадает с переменной данных)
+        key='sys_prompt_widget', 
+        # ПРИ ИЗМЕНЕНИИ обновляем данные
+        on_change=on_text_change,
+        help="Этот текст будет добавлен в начало финального промпта"
     )
     
+    def clear_sys_prompt():
+        st.session_state.system_prompt = ""
+        # ✅ ДОБАВЬТЕ синхронизацию виджета
+        st.session_state.sys_prompt_widget = ""
+        # Rerun нужен, чтобы обновить value в виджете
+    
+    # Кнопки
     render_button_pair(
         clear_key="clear_sys",
         copy_key="copy_sys",
-        text_to_copy=st.session_state.get('system_prompt'),
-        clear_callback=lambda: st.session_state.update({'system_prompt': ''})
+        text_to_copy=st.session_state.system_prompt,
+        clear_callback=clear_sys_prompt
     )
