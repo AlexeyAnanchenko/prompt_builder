@@ -57,7 +57,7 @@ class DbDataLoader:
 
 
 # ==========================================
-# 2. CONTEXT RESOLVER (Без изменений)
+# 2. CONTEXT RESOLVER
 # ==========================================
 class ContextResolver:
     def __init__(self, loader: DbDataLoader):
@@ -83,7 +83,6 @@ class ContextResolver:
                 found = True
         return found
 
-    # --- Core Logic Methods ---
     def _add_dataset(self, pk):
         if pk in self.context['datasets']: return
         self.context['datasets'].add(pk)
@@ -318,20 +317,18 @@ class OutputGenerator:
             'composed_entities': {'composed_entity': 'entity', 'entity_type': 'entity'}
         }
         
-        # Поля, содержимое которых нужно прогонять через masker.mask_text.
-        # request_path обрабатывается отдельно, но оставляем его здесь для совместимости
+        # Поля, которые нужно обрабатывать как текст (с маскированием внутри)
         self.text_process_fields = [
             'config', 'calculation_func', 'aggregation_func', 'condition', 'expression', 'conversion_func', 'request_path'
         ]
         
-        # Поля, которые точно являются массивами (или их строковым представлением)
+        # Поля, которые обрабатываем как массивы
         self.array_fields = ['request_path']
 
     def generate_sql(self) -> str:
         lines = []
         lines.append("SET SEARCH_PATH to qe_config;\n")
         
-        # Безопасный вызов prefill
         self._prefill_masker()
 
         order = [
@@ -360,8 +357,7 @@ class OutputGenerator:
             values_rows = []
             
             for pk in sorted_pks:
-                if pk not in self.loader.db[table]:
-                    continue
+                if pk not in self.loader.db[table]: continue
 
                 row = self.loader.db[table][pk]
                 vals = []
@@ -371,26 +367,27 @@ class OutputGenerator:
                     
                     if self.masker:
                         # 0. Спец-обработка для массивов (request_path)
-                        # Мы принудительно парсим значение как массив, маскируем элементы и собираем обратно
                         if c in self.array_fields and original_val is not None:
-                            # Нормализуем в плоский список строк
                             elements = self._normalize_array_value(original_val)
                             masked_elements = []
                             for elem in elements:
-                                # Регистрируем/получаем маску для каждого элемента
-                                masked_val = self.masker.register(elem, 'other')
-                                masked_elements.append(masked_val)
-                            
-                            # val_to_write будет списком, который _format_val корректно превратит в '{...}'
+                                if not elem: continue
+                                # ЭВРИСТИКА: Ищем маску среди известных категорий
+                                known_mask = self.masker.get_known_mask(elem, ['parameter', 'entity', 'property', 'table'])
+                                if known_mask:
+                                    masked_elements.append(known_mask)
+                                else:
+                                    # Если не нашли, регистрируем как generic object
+                                    masked_elements.append(self.masker.register(elem, 'other'))
                             val_to_write = masked_elements
 
-                        # 1. Прямая замена (если поле есть в правилах)
+                        # 1. Прямая замена (Scoped) - только для совпадающей категории
                         elif table in self.mask_rules and c in self.mask_rules[table]:
                             category = self.mask_rules[table][c]
                             if isinstance(original_val, str) and original_val:
                                 val_to_write = self.masker.register(original_val, category)
                         
-                        # 2. Замена внутри текста/структуры (для остальных сложных полей)
+                        # 2. Текстовая замена (для JSON/кода)
                         elif c in self.text_process_fields:
                             if isinstance(original_val, str):
                                 val_to_write = self.masker.mask_text(original_val)
@@ -402,7 +399,6 @@ class OutputGenerator:
                                 except:
                                     val_to_write = masked_s
                             elif isinstance(original_val, list):
-                                # Fallback для обычных списков, не попавших в array_fields
                                 masked_list = []
                                 for item in original_val:
                                     if isinstance(item, str):
@@ -425,14 +421,21 @@ class OutputGenerator:
         return "\n".join(lines)
 
     def _prefill_masker(self):
-        """Регистрируем ключевые сущности ДО генерации текста."""
-        if not self.masker:
-            return
-            
+        """Регистрируем сущности в их категориях (Scope)."""
+        if not self.masker: return
+        
+        # Регистрируем параметры как PARAM (изолированно)
+        for pk in self.context.get('parameters', []):
+            self.masker.register(pk[2], 'parameter')
+
+        # Регистрируем сущности как ENT (изолированно)
         for pk in self.context.get('entities', []):
             self.masker.register(pk[2], 'entity')
             
+        # Регистрируем свойства как P (изолированно)
         for pk in self.context.get('entity_properties', []):
+            # pk[2] - entity_type (нужен для контекста, но здесь регистрируем отдельно)
+            # Если имя сущности совпадает с именем параметра, register вернет разные маски
             self.masker.register(pk[2], 'entity') 
             self.masker.register(pk[3], 'property') 
             
@@ -442,75 +445,47 @@ class OutputGenerator:
         for pk in self.context.get('tables', []):
             self.masker.register(pk[2], 'table')
 
-        for pk in self.context.get('parameters', []):
-            self.masker.register(pk[2], 'parameter')
-
-        # скан массивов в параметрах ({val1,val2})
         self._scan_arrays_in_parameters()
-
-        # скан литералов в функциях ('literal')
         self._scan_literals_in_functions()
 
     def _normalize_array_value(self, val: Union[str, List, Any]) -> List[str]:
-        """
-        Превращает значение (список или строковое представление массива PG) в список строк.
-        Пример: '{a,b}' -> ['a', 'b']
-        Пример: ['a', 'b'] -> ['a', 'b']
-        """
         if isinstance(val, list):
             return [str(v) for v in val if v is not None]
         
         if isinstance(val, str):
             val = val.strip()
-            # Проверяем формат PG массива {val1,val2}
             if val.startswith('{') and val.endswith('}'):
-                # Regex для извлечения элементов, учитывая возможные кавычки
-                # Разбиваем по запятой, игнорируя запятые внутри кавычек
-                # Упрощенная версия: берем контент внутри {} и сплитим
                 content = val[1:-1]
-                if not content:
-                    return []
-                
-                # Грубый сплит, если нет сложных вложенных структур с запятыми
+                if not content: return []
                 parts = content.split(',')
                 normalized = []
                 for p in parts:
                     p = p.strip()
-                    # Убираем кавычки, если они есть ("value")
-                    if (p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'")):
+                    if len(p) >= 2 and ((p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'"))):
                         p = p[1:-1]
-                    normalized.append(p)
+                    if p: normalized.append(p)
                 return normalized
-                
         return []
 
     def _scan_arrays_in_parameters(self):
-        """
-        Сканирует поля параметров на наличие массивов и регистрирует их содержимое.
-        """
+        """Сканируем массивы, чтобы заранее зарегистрировать их элементы."""
         for pk in self.context.get('parameters', []):
             row = self.loader.db['parameters'].get(pk)
             if not row: continue
             
-            # Сканируем request_path и parameter_id
             for field in ['request_path', 'parameter_id']:
                 val = row.get(field)
                 if not val: continue
-                
                 elements = self._normalize_array_value(val)
                 for item in elements:
                     if item:
-                        self.masker.register(item, 'other')
+                        # Здесь просто регистрируем как 'other', если еще не найдено
+                        # Однако, если элемент совпадает с параметром, register('other') создаст новую маску OBJ
+                        # Лучше оставить как есть, а в generate_sql использовать get_known_mask
+                        pass
 
     def _scan_literals_in_functions(self):
-        """
-        Сканирует строковые константы в функциях.
-        """
-        scan_fields = [
-            'calculation_func', 'aggregation_func', 'conversion_func', 
-            'expression', 'condition', 'config'
-        ]
-        
+        scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
         literal_regex = re.compile(r"'([\w.]+)'")
 
         def scan_row(row: Dict[str, Any]):
