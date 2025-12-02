@@ -311,18 +311,16 @@ class OutputGenerator:
             'entities': {'entity_type': 'entity', 'entity_name': 'other'},
             'entity_properties': {'entity_type': 'entity', 'property_id': 'property'},
             'parameters': {'parameter_id': 'parameter'}, 
-            'tables': {'table_id': 'table', 'physical_name': 'other'},
+            'tables': {'table_id': 'table', 'physical_name': 'physical_table'},
             'table_fields': {'table_id': 'table', 'entity_type': 'entity', 'property_id': 'property', 'field_name': 'other'},
             'vertex_functions': {'entity_type': 'entity', 'property_id': 'property'},
             'composed_entities': {'composed_entity': 'entity', 'entity_type': 'entity'}
         }
         
-        # Поля, которые нужно обрабатывать как текст (с маскированием внутри)
         self.text_process_fields = [
             'config', 'calculation_func', 'aggregation_func', 'condition', 'expression', 'conversion_func', 'request_path'
         ]
         
-        # Поля, которые обрабатываем как массивы
         self.array_fields = ['request_path']
 
     def generate_sql(self) -> str:
@@ -366,28 +364,26 @@ class OutputGenerator:
                     val_to_write = original_val
                     
                     if self.masker:
-                        # 0. Спец-обработка для массивов (request_path)
+                        # 0. Спец-обработка для массивов
                         if c in self.array_fields and original_val is not None:
                             elements = self._normalize_array_value(original_val)
                             masked_elements = []
                             for elem in elements:
                                 if not elem: continue
-                                # ЭВРИСТИКА: Ищем маску среди известных категорий
                                 known_mask = self.masker.get_known_mask(elem, ['parameter', 'entity', 'property', 'table'])
                                 if known_mask:
                                     masked_elements.append(known_mask)
                                 else:
-                                    # Если не нашли, регистрируем как generic object
                                     masked_elements.append(self.masker.register(elem, 'other'))
                             val_to_write = masked_elements
 
-                        # 1. Прямая замена (Scoped) - только для совпадающей категории
+                        # 1. Прямая замена (Scoped)
                         elif table in self.mask_rules and c in self.mask_rules[table]:
                             category = self.mask_rules[table][c]
                             if isinstance(original_val, str) and original_val:
                                 val_to_write = self.masker.register(original_val, category)
                         
-                        # 2. Текстовая замена (для JSON/кода)
+                        # 2. Текстовая замена
                         elif c in self.text_process_fields:
                             if isinstance(original_val, str):
                                 val_to_write = self.masker.mask_text(original_val)
@@ -424,18 +420,13 @@ class OutputGenerator:
         """Регистрируем сущности в их категориях (Scope)."""
         if not self.masker: return
         
-        # Регистрируем параметры как PARAM (изолированно)
         for pk in self.context.get('parameters', []):
             self.masker.register(pk[2], 'parameter')
 
-        # Регистрируем сущности как ENT (изолированно)
         for pk in self.context.get('entities', []):
             self.masker.register(pk[2], 'entity')
             
-        # Регистрируем свойства как P (изолированно)
         for pk in self.context.get('entity_properties', []):
-            # pk[2] - entity_type (нужен для контекста, но здесь регистрируем отдельно)
-            # Если имя сущности совпадает с именем параметра, register вернет разные маски
             self.masker.register(pk[2], 'entity') 
             self.masker.register(pk[3], 'property') 
             
@@ -468,7 +459,7 @@ class OutputGenerator:
         return []
 
     def _scan_arrays_in_parameters(self):
-        """Сканируем массивы, чтобы заранее зарегистрировать их элементы."""
+        """Сканируем массивы."""
         for pk in self.context.get('parameters', []):
             row = self.loader.db['parameters'].get(pk)
             if not row: continue
@@ -478,24 +469,38 @@ class OutputGenerator:
                 if not val: continue
                 elements = self._normalize_array_value(val)
                 for item in elements:
-                    if item:
-                        # Здесь просто регистрируем как 'other', если еще не найдено
-                        # Однако, если элемент совпадает с параметром, register('other') создаст новую маску OBJ
-                        # Лучше оставить как есть, а в generate_sql использовать get_known_mask
-                        pass
+                    pass
 
     def _scan_literals_in_functions(self):
         scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
+        
+        # Regex для словарей
+        dict_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*'([\w.]+)'")
+        
+        # Regex для литералов
         literal_regex = re.compile(r"'([\w.]+)'")
 
         def scan_row(row: Dict[str, Any]):
             for field in scan_fields:
                 val = row.get(field)
                 if isinstance(val, str) and val:
+                    # 1. Сначала ищем словари
+                    dict_matches = dict_regex.findall(val)
+                    for m in dict_matches:
+                        if m:
+                            self.masker.register(m, 'dictionary')
+
+                    # 2. Затем все остальное
                     matches = literal_regex.findall(val)
                     for m in matches:
                         if m:
-                            category = 'table' if '.' in m else 'other'
+                            # ВАЖНОЕ ИСПРАВЛЕНИЕ:
+                            # Если термин уже известен как словарь, НЕ ПЕРЕЗАПИСЫВАЕМ его категорию.
+                            # Это сохраняет маску DB.DICT_... в глобальной карте.
+                            if m in self.masker.scoped_registry['dictionary']:
+                                continue
+                            
+                            category = 'physical_table' if '.' in m else 'other'
                             self.masker.register(m, category)
 
         for table in ['entity_properties', 'vertex_functions', 'constraints']:
