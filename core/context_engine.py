@@ -297,7 +297,7 @@ class ContextResolver:
         return None
 
 # ==========================================
-# 3. OUTPUT GENERATOR (Исправленный)
+# 3. OUTPUT GENERATOR
 # ==========================================
 
 class OutputGenerator:
@@ -324,7 +324,6 @@ class OutputGenerator:
 
     def generate_sql(self) -> str:
         lines = []
-        lines.append("-- AUTOMATICALLY GENERATED CONTEXT FROM DB")
         lines.append("SET SEARCH_PATH to qe_config;\n")
         
         # Безопасный вызов prefill
@@ -345,7 +344,7 @@ class OutputGenerator:
             pks = self.context.get(table, set())
             if not pks: continue
             
-            lines.append(f"-- {table.upper()} ({len(pks)})")
+            lines.append(f"-- {table} ({len(pks)})")
             
             cols = self.loader.table_cols.get(table, [])
             if not cols: 
@@ -398,7 +397,6 @@ class OutputGenerator:
 
     def _prefill_masker(self):
         """Регистрируем ключевые сущности ДО генерации текста."""
-        # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ: ПРОВЕРКА НА None ---
         if not self.masker:
             return
         # ---------------------------------------------

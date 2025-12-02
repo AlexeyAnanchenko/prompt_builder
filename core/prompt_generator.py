@@ -1,5 +1,4 @@
 from typing import List, Optional
-from services.vector_store import VectorStoreManager
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -8,7 +7,6 @@ class PromptGenerator:
     """Генератор финальных промптов с контекстом"""
     
     def __init__(self):
-        self.vector_manager = VectorStoreManager()
         logger.info("PromptGenerator инициализирован")
     
     def generate(
@@ -19,36 +17,23 @@ class PromptGenerator:
         sql_context: Optional[str] = None
     ) -> str:
         """
-        Генерирует финальный промпт с контекстом из векторной БД и SQL
+        Генерирует финальный промпт с контекстом из БД приложения.
         """
+
         logger.info(f"Начало генерации промпта для namespace '{namespace}'")
         
-        # Получаем релевантные результаты из векторной БД (RAG)
-        similar_results = self.vector_manager.search_similar(
-            user_query,
-            namespace
-        )
-        logger.info(f"Получено {len(similar_results)} релевантных результатов из RAG")
-        
-        context_parts: List[str] = []
-        for result in similar_results:
-            context_parts.append(f"- {result['content']}")
-        
-        rag_context = "\n".join(context_parts) if context_parts else "Нет релевантного текстового контекста"
-        
-        # SQL контекст, сгенерированный ContextEngine
         final_sql_context = sql_context if sql_context else "-- Контекст конфигурации не выбран или пуст."
         
-        final_prompt = f"""-- Системный промпт:
+        final_prompt = f"""-- СИСТЕМНЫЙ ПРОМПТ:
 {system_prompt}
 
--- Контекст (Knowledge Base / RAG):
-{rag_context}
 
--- Конфигурация (DDL/Insert):
+-- КОНТЕКСТ:
+--=============================== SQL ===============================
 {final_sql_context}
+--=============================== SQL ===============================
 
--- Пользовательский запрос:
+-- ПОЛЬЗОВАТЕЛЬСКИЙ ЗАПРОС:
 {user_query}"""
         
         logger.info(f"Промпт сгенерирован. Длина: {len(final_prompt)} символов")

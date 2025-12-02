@@ -34,7 +34,7 @@ class ContextMasker:
             'parameter': 'PARAM',
             'other': 'OBJ'
         }
-        logger.info("ContextMasker initialized")
+        logger.info("ContextMasker инициализирован")
 
     def register(self, real_name: str, category: str = 'other') -> str:
         """Регистрирует термин и выдает ему маску (или возвращает существующую)."""

@@ -5,7 +5,6 @@ from utils.logger import setup_logger
 from ui.styles import inject_custom_styles
 from ui.components import render_animated_header, render_sidebar_info
 
-# Импорт страниц
 from ui.pages.step1_system_prompt import render_step1
 from ui.pages.step2_context import render_step2
 from ui.pages.step3_chat import render_step3
@@ -21,10 +20,9 @@ def main():
         
         render_animated_header()
         
-        # Шаги
         render_step1()
         render_step2()
-        render_step3() # <--- ВЫЗОВ
+        render_step3()
         
         render_sidebar_info()
         logger.info("UI успешно отрендерен")
