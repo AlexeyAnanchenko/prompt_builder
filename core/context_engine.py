@@ -2,7 +2,7 @@ import re
 import json
 import datetime
 from collections import defaultdict
-from typing import Dict, List, Any, Set, Optional, Tuple
+from typing import Dict, List, Any, Set, Optional, Union
 
 from utils.logger import setup_logger
 from core.masking import ContextMasker
@@ -10,7 +10,7 @@ from core.masking import ContextMasker
 logger = setup_logger(__name__)
 
 # ==========================================
-# 1. DB DATA LOADER (Без изменений)
+# 1. DB DATA LOADER
 # ==========================================
 class DbDataLoader:
     def __init__(self, raw_data: Dict[str, List[Dict[str, Any]]]):
@@ -318,9 +318,14 @@ class OutputGenerator:
             'composed_entities': {'composed_entity': 'entity', 'entity_type': 'entity'}
         }
         
+        # Поля, содержимое которых нужно прогонять через masker.mask_text.
+        # request_path обрабатывается отдельно, но оставляем его здесь для совместимости
         self.text_process_fields = [
-            'config', 'calculation_func', 'aggregation_func', 'condition', 'expression'
+            'config', 'calculation_func', 'aggregation_func', 'condition', 'expression', 'conversion_func', 'request_path'
         ]
+        
+        # Поля, которые точно являются массивами (или их строковым представлением)
+        self.array_fields = ['request_path']
 
     def generate_sql(self) -> str:
         lines = []
@@ -364,14 +369,29 @@ class OutputGenerator:
                     original_val = row.get(c)
                     val_to_write = original_val
                     
-                    # Логика маскирования (только если masker существует)
                     if self.masker:
-                        if table in self.mask_rules and c in self.mask_rules[table]:
+                        # 0. Спец-обработка для массивов (request_path)
+                        # Мы принудительно парсим значение как массив, маскируем элементы и собираем обратно
+                        if c in self.array_fields and original_val is not None:
+                            # Нормализуем в плоский список строк
+                            elements = self._normalize_array_value(original_val)
+                            masked_elements = []
+                            for elem in elements:
+                                # Регистрируем/получаем маску для каждого элемента
+                                masked_val = self.masker.register(elem, 'other')
+                                masked_elements.append(masked_val)
+                            
+                            # val_to_write будет списком, который _format_val корректно превратит в '{...}'
+                            val_to_write = masked_elements
+
+                        # 1. Прямая замена (если поле есть в правилах)
+                        elif table in self.mask_rules and c in self.mask_rules[table]:
                             category = self.mask_rules[table][c]
                             if isinstance(original_val, str) and original_val:
                                 val_to_write = self.masker.register(original_val, category)
                         
-                        if c in self.text_process_fields:
+                        # 2. Замена внутри текста/структуры (для остальных сложных полей)
+                        elif c in self.text_process_fields:
                             if isinstance(original_val, str):
                                 val_to_write = self.masker.mask_text(original_val)
                             elif isinstance(original_val, dict):
@@ -381,6 +401,15 @@ class OutputGenerator:
                                     val_to_write = json.loads(masked_s)
                                 except:
                                     val_to_write = masked_s
+                            elif isinstance(original_val, list):
+                                # Fallback для обычных списков, не попавших в array_fields
+                                masked_list = []
+                                for item in original_val:
+                                    if isinstance(item, str):
+                                        masked_list.append(self.masker.mask_text(item))
+                                    else:
+                                        masked_list.append(item)
+                                val_to_write = masked_list
 
                     vals.append(self._format_val(val_to_write))
                 
@@ -399,8 +428,7 @@ class OutputGenerator:
         """Регистрируем ключевые сущности ДО генерации текста."""
         if not self.masker:
             return
-        # ---------------------------------------------
-        
+            
         for pk in self.context.get('entities', []):
             self.masker.register(pk[2], 'entity')
             
@@ -416,6 +444,89 @@ class OutputGenerator:
 
         for pk in self.context.get('parameters', []):
             self.masker.register(pk[2], 'parameter')
+
+        # скан массивов в параметрах ({val1,val2})
+        self._scan_arrays_in_parameters()
+
+        # скан литералов в функциях ('literal')
+        self._scan_literals_in_functions()
+
+    def _normalize_array_value(self, val: Union[str, List, Any]) -> List[str]:
+        """
+        Превращает значение (список или строковое представление массива PG) в список строк.
+        Пример: '{a,b}' -> ['a', 'b']
+        Пример: ['a', 'b'] -> ['a', 'b']
+        """
+        if isinstance(val, list):
+            return [str(v) for v in val if v is not None]
+        
+        if isinstance(val, str):
+            val = val.strip()
+            # Проверяем формат PG массива {val1,val2}
+            if val.startswith('{') and val.endswith('}'):
+                # Regex для извлечения элементов, учитывая возможные кавычки
+                # Разбиваем по запятой, игнорируя запятые внутри кавычек
+                # Упрощенная версия: берем контент внутри {} и сплитим
+                content = val[1:-1]
+                if not content:
+                    return []
+                
+                # Грубый сплит, если нет сложных вложенных структур с запятыми
+                parts = content.split(',')
+                normalized = []
+                for p in parts:
+                    p = p.strip()
+                    # Убираем кавычки, если они есть ("value")
+                    if (p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'")):
+                        p = p[1:-1]
+                    normalized.append(p)
+                return normalized
+                
+        return []
+
+    def _scan_arrays_in_parameters(self):
+        """
+        Сканирует поля параметров на наличие массивов и регистрирует их содержимое.
+        """
+        for pk in self.context.get('parameters', []):
+            row = self.loader.db['parameters'].get(pk)
+            if not row: continue
+            
+            # Сканируем request_path и parameter_id
+            for field in ['request_path', 'parameter_id']:
+                val = row.get(field)
+                if not val: continue
+                
+                elements = self._normalize_array_value(val)
+                for item in elements:
+                    if item:
+                        self.masker.register(item, 'other')
+
+    def _scan_literals_in_functions(self):
+        """
+        Сканирует строковые константы в функциях.
+        """
+        scan_fields = [
+            'calculation_func', 'aggregation_func', 'conversion_func', 
+            'expression', 'condition', 'config'
+        ]
+        
+        literal_regex = re.compile(r"'([\w.]+)'")
+
+        def scan_row(row: Dict[str, Any]):
+            for field in scan_fields:
+                val = row.get(field)
+                if isinstance(val, str) and val:
+                    matches = literal_regex.findall(val)
+                    for m in matches:
+                        if m:
+                            category = 'table' if '.' in m else 'other'
+                            self.masker.register(m, category)
+
+        for table in ['entity_properties', 'vertex_functions', 'constraints']:
+            for pk in self.context.get(table, []):
+                if pk in self.loader.db[table]:
+                    scan_row(self.loader.db[table][pk])
 
     def _format_val(self, val: Any) -> str:
         if val is None: return "null"
