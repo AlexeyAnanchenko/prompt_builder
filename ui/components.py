@@ -118,16 +118,12 @@ def render_step_toggle_button(
     """
     icon = "▼" if st.session_state.get(state_key, False) else "▶"
     
-    # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-    # Расширенный список эмодзи, чтобы не вылетала ошибка при step_number=4
     emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     
-    # Безопасное получение эмодзи
     if 0 <= step_number - 1 < len(emojis):
         emoji = emojis[step_number - 1]
     else:
-        emoji = f"#{step_number}" # Fallback, если шагов будет больше 10
-    # -------------------------
+        emoji = f"#{step_number}"
     
     if st.button(
         f'{emoji} {title} {icon}',
@@ -166,23 +162,38 @@ def render_sidebar_info() -> None:
 """)
     
     st.sidebar.markdown("### 📈 Статистика")
+    
     st.sidebar.metric(
         "Версий системного промпта:",
         len(st.session_state.get('prompt_versions', {}))
     )
+    
+    system_prompt_length = len(st.session_state.get('system_prompt', '') or '')
     st.sidebar.metric(
         "Длина системного промпта (символов):",
-        f"{len(st.session_state.get('system_prompt', '') or '')}"
-    )
-    st.sidebar.metric(
-        "Токенов в финальном промпте:",
-        st.session_state.get('token_count', 0)
+        f"{system_prompt_length:,}"
     )
     
-    if st.session_state.get('enable_masking'):
+    # --- УПРОЩЕННЫЙ ВЫВОД ТОКЕНОВ ---
+    token_count = st.session_state.get('token_count', 0)
+    
+    if token_count > 0:
+        st.sidebar.metric(
+            "Токенов в промпте:",
+            f"{token_count:,}"
+        )
+    else:
+        st.sidebar.metric(
+            "Токенов в промпте:",
+            "—"
+        )
+    # --------------------------------
+    
+    masking_dict = st.session_state.get('masking_dictionary', {})
+    if masking_dict:
         st.sidebar.metric(
             "Замаскированных элементов:",
-            len(st.session_state.get('masking_dictionary', {}))
+            len(masking_dict)
         )
     
     if st.session_state.get('current_version'):

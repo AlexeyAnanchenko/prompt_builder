@@ -10,6 +10,7 @@ from core.masking import ContextMasker
 from services.database import DatabaseManager
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS, MAX_TOKENS
 from utils.logger import setup_logger
+from utils.tokenizer import TokenCounter
 
 logger = setup_logger(__name__)
 
@@ -17,11 +18,9 @@ def render_step2() -> None:
     """Рендерит шаг 2: Генерация промпта с маскированием"""
     logger.info("Рендер шага 2: Генерация промпта")
     
-    # Инициализация маскера
     if "masker" not in st.session_state:
         st.session_state["masker"] = ContextMasker()
 
-    # CSS для зеленой кнопки
     st.markdown("""
         <style>
         div[data-testid="stButton"] > button[key="btn_generate_final_prompt"] {
@@ -50,11 +49,9 @@ def render_step2() -> None:
     if not st.session_state.get('show_step2', True):
         return
     
-    # 1. Загрузка данных
     _render_data_loading_section()
     st.markdown("---")
     
-    # 2. Выбор сущностей
     if "loader" in st.session_state:
         _render_context_selection_section()
     else:
@@ -62,13 +59,11 @@ def render_step2() -> None:
     
     st.markdown("---")
 
-    # 3. Рабочая область: Запрос (слева) -> Результат (справа)
     col_left, col_right = st.columns(2)
     
     with col_left:
         _render_user_query_section()
         
-        # Кнопка генерации под полем ввода
         st.write("") 
         if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
             _handle_generate_combined()
@@ -130,34 +125,30 @@ def _render_user_query_section():
 def _render_result_tabs_section():
     st.subheader("✨ Результат")
     
-    # Проверяем, есть ли сгенерированный промпт
     if not st.session_state.get('final_prompt_masked'):
         st.info("Введите запрос и нажмите кнопку 'Сгенерировать' слева.")
         return
 
-    # Показываем успех сразу
     st.success("Промпт успешно сгенерирован!")
 
-    # Табы для переключения
     tab_masked, tab_original = st.tabs(["🎭 Замаскированный (Safe)", "👁️ Оригинальный"])
     
     masker = st.session_state.get("masker")
+    token_count = st.session_state.get('token_count', 0)
     
     # --- TAB 1: MASKED ---
     with tab_masked:
         masked_text = st.session_state.final_prompt_masked
         
-        # Счетчик токенов показываем сразу (это полезная мета-информация)
-        render_token_counter(len(masked_text.split()), MAX_TOKENS)
+        # Просто рендерим каунтер без лишних слов
+        render_token_counter(token_count, MAX_TOKENS)
         
         st.caption("Этот текст безопасен для отправки в публичную LLM.")
 
-        # Прячем огромный текст под кат
         with st.expander("📄 Показать текст промпта и кнопки", expanded=False):
             st.code(masked_text, language="sql", line_numbers=True)
             render_button_pair("clear_masked", "copy_masked", masked_text)
         
-        # Словарь замен отдельным экспандером
         if masker and masker.map_forward:
              with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
                 st.table([
@@ -169,10 +160,9 @@ def _render_result_tabs_section():
     with tab_original:
         orig_text = st.session_state.final_prompt_original
         
-        render_token_counter(len(orig_text.split()), MAX_TOKENS)
+        render_token_counter(token_count, MAX_TOKENS)
         st.caption("Внимание! Содержит реальные названия полей и конфигураций.")
         
-        # Прячем оригинал под кат
         with st.expander("📄 Показать оригинальный промпт", expanded=False):
             st.code(orig_text, language="sql", line_numbers=True)
             render_button_pair("clear_orig", "copy_orig", orig_text)
@@ -201,41 +191,33 @@ def _handle_generate_combined():
     user_query_orig = st.session_state.get('user_query', '')
     
     with st.spinner("Анализ графа, генерация SQL и маскирование..."):
-        # A. Строим контекст (Граф зависимостей)
-        # Это нужно сделать один раз, так как граф зависимостей одинаков
+        # A. Строим контекст
         resolver = ContextResolver(loader)
         if datasets or entities:
             for ds in datasets: resolver.resolve_by_dataset(ds)
             for ent in entities: resolver.resolve_by_entity(ent)
         
-        # B. Генерируем SQL в ДВУХ вариантах
-        
-        # Вариант 1: Замаскированный (Заполняет masker словарь)
+        # B. Генерируем SQL
         gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
         sql_masked = gen_masked.generate_sql()
         
-        # Вариант 2: Оригинальный (masker=None)
         gen_orig = OutputGenerator(loader, resolver.context, masker=None)
         sql_original = gen_orig.generate_sql()
         
-        # C. Маскируем текстовые части промпта (User Query, System Prompt)
-        # Теперь, когда SQL сгенерирован, словарь маскера полон ID-шников.
-        # Можем прогнать через него текст вопроса.
+        # C. Маскируем текстовые части
         system_prompt_masked = masker.mask_text(system_prompt_orig)
         user_query_masked = masker.mask_text(user_query_orig)
         
-        # D. Собираем финальные промпты через PromptGenerator
+        # D. Собираем финальные промпты
         generator = PromptGenerator()
         
-        # Промпт 1: Полностью замаскированный
         final_prompt_masked = generator.generate(
             system_prompt=system_prompt_masked,
             user_query=user_query_masked,
-            namespace=ns_id, # Namespace ID можно не маскировать или замаскировать отдельно, если критично
+            namespace=ns_id,
             sql_context=sql_masked
         )
         
-        # Промпт 2: Полностью оригинальный
         final_prompt_original = generator.generate(
             system_prompt=system_prompt_orig,
             user_query=user_query_orig,
@@ -243,10 +225,22 @@ def _handle_generate_combined():
             sql_context=sql_original
         )
         
-        # Сохраняем в Session State
         st.session_state.final_prompt_masked = final_prompt_masked
         st.session_state.final_prompt_original = final_prompt_original
-        st.session_state.generated_sql_context = sql_original # На всякий случай
+        st.session_state.generated_sql_context = sql_original
+        
+        # --- ПОДСЧЕТ ТОКЕНОВ ---
+        try:
+            # Используем count_tokens, который возвращает int
+            token_count = TokenCounter.count_tokens(final_prompt_masked)
+            st.session_state.token_count = token_count
+            logger.info(f"Токенов в промпте: {token_count}")
+        except Exception as e:
+            logger.error(f"Ошибка подсчета токенов: {e}")
+            st.session_state.token_count = 0
+        
+        st.session_state.masking_dictionary = masker.map_forward.copy()
+        st.session_state.enable_masking = len(masker.map_forward) > 0
         
         st.success("Готово! Выберите вкладку справа.")
         st.rerun()

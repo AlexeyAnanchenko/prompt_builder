@@ -54,3 +54,6 @@ Thumbs.db
 # Backup files
 *_backup.py
 *.bak
+
+# Tokenizer
+deepseek_tokenizer
