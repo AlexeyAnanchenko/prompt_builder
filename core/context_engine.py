@@ -364,18 +364,16 @@ class OutputGenerator:
                     val_to_write = original_val
                     
                     if self.masker:
-                        # 0. Спец-обработка для массивов
+                        # 0. Спец-обработка для массивов (ТОЛЬКО request_path)
+                        # Мы игнорируем, встречалось ли слово раньше.
+                        # В контексте пути это ВСЕГДА будет PATH.
                         if c in self.array_fields and original_val is not None:
                             elements = self._normalize_array_value(original_val)
                             masked_elements = []
                             for elem in elements:
                                 if not elem: continue
-                                known_mask = self.masker.get_known_mask(elem, ['parameter', 'entity', 'property', 'table'])
-                                if known_mask:
-                                    masked_elements.append(known_mask)
-                                else:
-                                    # Fallback to 'path' instead of 'other'
-                                    masked_elements.append(self.masker.register(elem, 'path'))
+                                # ЖЕСТКАЯ изоляция: всегда 'path'
+                                masked_elements.append(self.masker.register(elem, 'path'))
                             val_to_write = masked_elements
 
                         # 1. Прямая замена (Scoped)
@@ -468,15 +466,19 @@ class OutputGenerator:
             for field in ['request_path', 'parameter_id']:
                 val = row.get(field)
                 if not val: continue
+                
                 elements = self._normalize_array_value(val)
                 for item in elements:
                     if not item: continue
-                    # Если элемент еще не известен, регистрируем как PATH, чтобы при генерации он не стал OBJ
-                    if not self.masker.get_known_mask(item, ['parameter', 'entity', 'property', 'table']):
-                         # Если метод вызовется до регистрации параметров, можно "украсть" имя.
-                         # Но _prefill_masker вызывает этот метод ПОСЛЕ регистрации параметров.
-                         # Поэтому безопасно.
-                         self.masker.register(item, 'path')
+                    
+                    # Разделяем логику регистрации в зависимости от поля
+                    if field == 'request_path':
+                        self.masker.register(item, 'path')
+                    elif field == 'parameter_id':
+                        self.masker.register(item, 'parameter')
+                    else:
+                        # Fallback (на случай добавления других полей)
+                        self.masker.register(item, 'other')
 
     def _scan_literals_in_functions(self):
         scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
