@@ -22,7 +22,8 @@ class ContextMasker:
             'table': 1, 'parameter': 1, 'other': 1,
             'physical_table': 1, 'dictionary': 1,
             'path': 1,
-            'entity_name': 1
+            'entity_name': 1,
+            'column': 1
         }
         
         self.prefixes = {
@@ -35,32 +36,48 @@ class ContextMasker:
             'physical_table': 'DB.TBL', 
             'dictionary': 'DB.DICT',
             'path': 'PATH',
-            'entity_name': 'ENT_NAME'
+            'entity_name': 'ENT_NAME',
+            'column': 'COL'
         }
-        logger.info("ContextMasker initialized (Scoped mode + DB/PATH formats)")
+        logger.info("ContextMasker initialized (Scoped + FQN Support)")
 
     def register(self, real_name: str, category: str = 'other') -> str:
+        """
+        Регистрирует термин.
+        Важно: Глобальный словарь map_forward перезаписывается последним вызовом.
+        Это позволяет приоритезировать категории через порядок регистрации.
+        """
         if not real_name:
             return str(real_name)
             
         real_name_str = str(real_name)
         
-        # 1. Проверяем наличие в конкретной категории
+        # 1. Проверяем наличие в конкретной категории (Scope)
         if real_name_str in self.scoped_registry[category]:
-            return self.scoped_registry[category][real_name_str]
+            masked_name = self.scoped_registry[category][real_name_str]
+        else:
+            # 2. Генерируем новую маску
+            idx = self.counters.get(category, 1)
+            self.counters[category] += 1
+            prefix = self.prefixes.get(category, 'OBJ')
+            masked_name = f"{prefix}_{idx}"
+            self.scoped_registry[category][real_name_str] = masked_name
         
-        # 2. Генерируем новую маску
-        idx = self.counters.get(category, 1)
-        self.counters[category] += 1
-        prefix = self.prefixes.get(category, 'OBJ')
-        masked_name = f"{prefix}_{idx}"
-        
-        # 3. Сохраняем
-        self.scoped_registry[category][real_name_str] = masked_name
+        # 3. Обновляем глобальный словарь (ВСЕГДА перезаписываем)
+        # Это гарантирует, что Property перезапишет Parameter для bare-words
         self.map_forward[real_name_str] = masked_name
         self.map_reverse[masked_name] = real_name_str
         
         return masked_name
+
+    def add_manual_mapping(self, real_name: str, masked_name: str):
+        """
+        Ручная регистрация маппинга (например, для составных имен Entity.Property).
+        Такие маппинги имеют приоритет в mask_text, так как они длиннее.
+        """
+        if not real_name or not masked_name: return
+        self.map_forward[real_name] = masked_name
+        self.map_reverse[masked_name] = real_name
 
     def get_known_mask(self, real_name: str, priority_categories: List[str]) -> Optional[str]:
         real_name_str = str(real_name)
@@ -72,6 +89,8 @@ class ContextMasker:
     def mask_text(self, text: str) -> str:
         if not text: return ""
         
+        # Сортировка по длине критически важна:
+        # "User.status" (длиннее) заменится раньше, чем "User" или "status"
         sorted_keys = sorted(self.map_forward.keys(), key=len, reverse=True)
         result = text
         
@@ -80,6 +99,7 @@ class ContextMasker:
             mask = self.map_forward[real]
             escaped_real = re.escape(real)
             
+            # \b используем только для "чистых" слов
             if re.match(r'^\w+$', real):
                 pattern = re.compile(rf'\b{escaped_real}\b')
             else:

@@ -305,7 +305,7 @@ class OutputGenerator:
         self.context = context
         self.masker = masker
         
-        # Правила маскирования: Таблица -> Колонка -> Категория маски
+        # Правила маскирования
         self.mask_rules = {
             'datasets': {'dataset_id': 'dataset'},
             'entities': {'entity_type': 'entity', 'entity_name': 'entity_name'},
@@ -364,25 +364,19 @@ class OutputGenerator:
                     val_to_write = original_val
                     
                     if self.masker:
-                        # 0. Спец-обработка для массивов (ТОЛЬКО request_path)
-                        # Мы игнорируем, встречалось ли слово раньше.
-                        # В контексте пути это ВСЕГДА будет PATH.
                         if c in self.array_fields and original_val is not None:
                             elements = self._normalize_array_value(original_val)
                             masked_elements = []
                             for elem in elements:
                                 if not elem: continue
-                                # ЖЕСТКАЯ изоляция: всегда 'path'
                                 masked_elements.append(self.masker.register(elem, 'path'))
                             val_to_write = masked_elements
 
-                        # 1. Прямая замена (Scoped)
                         elif table in self.mask_rules and c in self.mask_rules[table]:
                             category = self.mask_rules[table][c]
                             if isinstance(original_val, str) and original_val:
                                 val_to_write = self.masker.register(original_val, category)
                         
-                        # 2. Текстовая замена
                         elif c in self.text_process_fields:
                             if isinstance(original_val, str):
                                 val_to_write = self.masker.mask_text(original_val)
@@ -404,14 +398,10 @@ class OutputGenerator:
 
                     vals.append(self._format_val(val_to_write))
                 
-                # ЛОГИКА ВЫБОРА ФОРМАТА
-                # Таблицы, содержащие код/формулы, форматируем с отступами
                 complex_tables = ['entity_properties', 'vertex_functions']
-                
                 if table in complex_tables:
                     row_str = self._format_row_pretty(vals)
                 else:
-                    # Простые таблицы (parameters, entities, tables...) оставляем в одну строку
                     row_str = f"({', '.join(vals)})"
                 
                 values_rows.append(row_str)
@@ -424,26 +414,81 @@ class OutputGenerator:
             lines.append("")
             
         return "\n".join(lines)
+    
+    def _format_row_pretty(self, vals: List[str]) -> str:
+        lines = []
+        current_line = "  "
+        VERTICAL_START_INDEX = 5 
+        
+        for i, val in enumerate(vals):
+            is_last = (i == len(vals) - 1)
+            suffix = "" if is_last else ", "
+            
+            if '\n' in val:
+                if current_line.strip() != "":
+                    lines.append(current_line.rstrip())
+                    current_line = "  "
+                replace_space_val = val.replace("    ", "  ")
+                lines.append(f"  {replace_space_val}{suffix}")
+                continue
+
+            if i >= VERTICAL_START_INDEX:
+                if current_line.strip() != "":
+                    lines.append(current_line.rstrip())
+                    current_line = "  "
+                lines.append(f"  {val}{suffix}")
+                continue
+
+            if len(current_line) + len(val) > 100:
+                 lines.append(current_line.rstrip())
+                 current_line = f"  {val}{suffix}"
+            else:
+                 current_line += f"{val}{suffix}"
+        
+        if current_line.strip() != "":
+            lines.append(current_line.rstrip())
+            
+        return "(\n" + "\n".join(lines) + "\n)"
 
     def _prefill_masker(self):
         """Регистрируем сущности в их категориях (Scope)."""
         if not self.masker: return
         
+        # 1. Сначала параметры и прочие базовые элементы
         for pk in self.context.get('parameters', []):
             self.masker.register(pk[2], 'parameter')
-
-        for pk in self.context.get('entities', []):
-            self.masker.register(pk[2], 'entity')
-            
-        for pk in self.context.get('entity_properties', []):
-            self.masker.register(pk[2], 'entity') 
-            self.masker.register(pk[3], 'property') 
             
         for pk in self.context.get('datasets', []):
             self.masker.register(pk[2], 'dataset')
             
         for pk in self.context.get('tables', []):
             self.masker.register(pk[2], 'table')
+
+        for pk in self.context.get('entities', []):
+            self.masker.register(pk[2], 'entity')
+            
+        # 2. Свойства регистрируем ПОЗЖЕ параметров, чтобы в глобальном словаре
+        # короткое имя (например 'status') перезаписалось как P_... 
+        # (так как в SQL контексте bare words - это колонки)
+        for pk in self.context.get('entity_properties', []):
+            self.masker.register(pk[2], 'entity') 
+            self.masker.register(pk[3], 'property') 
+            
+        # 3. ВАЖНО: Регистрируем полные имена (FQN) как мануальный маппинг.
+        # Это создает пару "Entity.Property" -> "ENT_X.P_Y"
+        # mask_text выберет это совпадение первым, так как оно длиннее.
+        for pk in self.context.get('entity_properties', []):
+            entity_type = pk[2]
+            property_id = pk[3]
+            
+            # Получаем уже сгенерированные маски
+            masked_entity = self.masker.register(entity_type, 'entity')
+            masked_prop = self.masker.register(property_id, 'property')
+            
+            real_fqn = f"{entity_type}.{property_id}"
+            masked_fqn = f"{masked_entity}.{masked_prop}"
+            
+            self.masker.add_manual_mapping(real_fqn, masked_fqn)
 
         self._scan_arrays_in_parameters()
         self._scan_literals_in_functions()
@@ -468,7 +513,6 @@ class OutputGenerator:
         return []
 
     def _scan_arrays_in_parameters(self):
-        """Сканируем массивы."""
         for pk in self.context.get('parameters', []):
             row = self.loader.db['parameters'].get(pk)
             if not row: continue
@@ -480,35 +524,45 @@ class OutputGenerator:
                 elements = self._normalize_array_value(val)
                 for item in elements:
                     if not item: continue
-                    
-                    # Разделяем логику регистрации в зависимости от поля
                     if field == 'request_path':
                         self.masker.register(item, 'path')
                     elif field == 'parameter_id':
                         self.masker.register(item, 'parameter')
                     else:
-                        # Fallback (на случай добавления других полей)
                         self.masker.register(item, 'other')
 
     def _scan_literals_in_functions(self):
         scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
         
-        dict_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*'([\w.]+)'")
+        dict_col_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*(?:'[^']+'|[\w\.]+)\s*,\s*'([\w.]+)'", re.DOTALL)
+        dict_tuple_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*(?:'[^']+'|[\w\.]+)\s*,\s*tuple\s*\((.*?)\)", re.DOTALL)
+        dict_name_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*'([\w.]+)'", re.DOTALL)
         literal_regex = re.compile(r"'([\w.]+)'")
 
         def scan_row(row: Dict[str, Any]):
             for field in scan_fields:
                 val = row.get(field)
                 if isinstance(val, str) and val:
-                    dict_matches = dict_regex.findall(val)
-                    for m in dict_matches:
-                        if m:
-                            self.masker.register(m, 'dictionary')
+                    
+                    dict_names = dict_name_regex.findall(val)
+                    for m in dict_names:
+                        if m: self.masker.register(m, 'dictionary')
+
+                    cols_single = dict_col_regex.findall(val)
+                    for m in cols_single:
+                        if m: self.masker.register(m, 'column')
+
+                    cols_tuple_content = dict_tuple_regex.findall(val)
+                    for content in cols_tuple_content:
+                        tuple_literals = literal_regex.findall(content)
+                        for m in tuple_literals:
+                            if m: self.masker.register(m, 'column')
 
                     matches = literal_regex.findall(val)
                     for m in matches:
                         if m:
-                            if m in self.masker.scoped_registry['dictionary']:
+                            if (m in self.masker.scoped_registry['dictionary'] or 
+                                m in self.masker.scoped_registry['column']):
                                 continue
                             
                             category = 'physical_table' if '.' in m else 'other'
@@ -543,55 +597,3 @@ class OutputGenerator:
                  return '"' + val.replace('"', '\\"') + '"'
             return val
         return str(val)
-    
-    def _format_row_pretty(self, vals: List[str]) -> str:
-        """
-        Форматирует строку VALUES.
-        Колонки 0-4 (ключи, типы) группируются в одну строку.
-        Колонки 5+ (функции, конфиги) всегда переносятся на новую строку.
-        """
-        lines = []
-        current_line = "  " # Базовый отступ 2 пробела
-        
-        # Индексы колонок, которые всегда должны начинаться с новой строки
-        VERTICAL_START_INDEX = 5 
-        
-        for i, val in enumerate(vals):
-            is_last = (i == len(vals) - 1)
-            suffix = "" if is_last else ", "
-            
-            # 1. Если значение многострочное - переносим на новую строку
-            if '\n' in val:
-                # Сбрасываем накопленную строку
-                if current_line.strip() != "":
-                    lines.append(current_line.rstrip())
-                    current_line = "  "
-                
-                # ВАЖНО: Выводим значение как есть, без дополнительного replace.
-                # Отступ '  ' добавится только перед первой строкой (где открывающая кавычка).
-                # Остальные строки сохранят свое форматирование из БД.
-                val_strip = val.replace("    ", "  ")
-                lines.append(f"  {val_strip}{suffix}")
-                continue
-
-            # 2. Если это колонка логики (>= 5) - принудительно новая строка
-            if i >= VERTICAL_START_INDEX:
-                if current_line.strip() != "":
-                    lines.append(current_line.rstrip())
-                    current_line = "  "
-                
-                lines.append(f"  {val}{suffix}")
-                continue
-
-            # 3. Группировка коротких значений
-            if len(current_line) + len(val) > 100:
-                 lines.append(current_line.rstrip())
-                 current_line = f"  {val}{suffix}"
-            else:
-                 current_line += f"{val}{suffix}"
-        
-        # Дописываем остаток
-        if current_line.strip() != "":
-            lines.append(current_line.rstrip())
-            
-        return "(\n" + "\n".join(lines) + "\n)"
