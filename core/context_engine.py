@@ -374,7 +374,8 @@ class OutputGenerator:
                                 if known_mask:
                                     masked_elements.append(known_mask)
                                 else:
-                                    masked_elements.append(self.masker.register(elem, 'other'))
+                                    # Fallback to 'path' instead of 'other'
+                                    masked_elements.append(self.masker.register(elem, 'path'))
                             val_to_write = masked_elements
 
                         # 1. Прямая замена (Scoped)
@@ -469,34 +470,32 @@ class OutputGenerator:
                 if not val: continue
                 elements = self._normalize_array_value(val)
                 for item in elements:
-                    pass
+                    if not item: continue
+                    # Если элемент еще не известен, регистрируем как PATH, чтобы при генерации он не стал OBJ
+                    if not self.masker.get_known_mask(item, ['parameter', 'entity', 'property', 'table']):
+                         # Если метод вызовется до регистрации параметров, можно "украсть" имя.
+                         # Но _prefill_masker вызывает этот метод ПОСЛЕ регистрации параметров.
+                         # Поэтому безопасно.
+                         self.masker.register(item, 'path')
 
     def _scan_literals_in_functions(self):
         scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
         
-        # Regex для словарей
         dict_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*'([\w.]+)'")
-        
-        # Regex для литералов
         literal_regex = re.compile(r"'([\w.]+)'")
 
         def scan_row(row: Dict[str, Any]):
             for field in scan_fields:
                 val = row.get(field)
                 if isinstance(val, str) and val:
-                    # 1. Сначала ищем словари
                     dict_matches = dict_regex.findall(val)
                     for m in dict_matches:
                         if m:
                             self.masker.register(m, 'dictionary')
 
-                    # 2. Затем все остальное
                     matches = literal_regex.findall(val)
                     for m in matches:
                         if m:
-                            # ВАЖНОЕ ИСПРАВЛЕНИЕ:
-                            # Если термин уже известен как словарь, НЕ ПЕРЕЗАПИСЫВАЕМ его категорию.
-                            # Это сохраняет маску DB.DICT_... в глобальной карте.
                             if m in self.masker.scoped_registry['dictionary']:
                                 continue
                             

@@ -20,20 +20,22 @@ class ContextMasker:
         self.counters = {
             'dataset': 1, 'entity': 1, 'property': 1,
             'table': 1, 'parameter': 1, 'other': 1,
-            'physical_table': 1, 'dictionary': 1 # Новые счетчики
+            'physical_table': 1, 'dictionary': 1,
+            'path': 1
         }
         
         self.prefixes = {
             'dataset': 'DS', 
             'entity': 'ENT', 
             'property': 'P', 
-            'table': 'TBL', # Логические таблицы конфигурации
+            'table': 'TBL', 
             'parameter': 'PARAM', 
             'other': 'OBJ',
-            'physical_table': 'DB.TBL', # Физические таблицы БД
-            'dictionary': 'DB.DICT'     # Словари
+            'physical_table': 'DB.TBL', 
+            'dictionary': 'DB.DICT',
+            'path': 'PATH'
         }
-        logger.info("ContextMasker initialized (Scoped mode + DB formats)")
+        logger.info("ContextMasker initialized (Scoped mode + DB/PATH formats)")
 
     def register(self, real_name: str, category: str = 'other') -> str:
         if not real_name:
@@ -68,7 +70,6 @@ class ContextMasker:
     def mask_text(self, text: str) -> str:
         if not text: return ""
         
-        # Сортируем по длине, чтобы избежать частичных замен
         sorted_keys = sorted(self.map_forward.keys(), key=len, reverse=True)
         result = text
         
@@ -77,7 +78,6 @@ class ContextMasker:
             mask = self.map_forward[real]
             escaped_real = re.escape(real)
             
-            # \b используем только для "чистых" слов. Для имен с точкой (DB.Table) границы слов работают иначе.
             if re.match(r'^\w+$', real):
                 pattern = re.compile(rf'\b{escaped_real}\b')
             else:
@@ -94,8 +94,6 @@ class ContextMasker:
         result = text
         for mask in sorted_keys:
             real = self.map_reverse[mask]
-            # Для масок (ENT_1, DB.TBL_1) границы слов важны, но точка в DB.TBL требует внимания
-            # Экранируем маску, она безопасна
             pattern = re.compile(rf'\b{re.escape(mask)}\b')
             new_text, n = pattern.subn(real, result)
             if n > 0:
