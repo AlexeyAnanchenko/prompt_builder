@@ -21,7 +21,8 @@ class ContextMasker:
             'dataset': 1, 'entity': 1, 'property': 1,
             'table': 1, 'parameter': 1, 'other': 1,
             'physical_table': 1, 'dictionary': 1,
-            'path': 1
+            'path': 1,
+            'entity_name': 1
         }
         
         self.prefixes = {
@@ -33,7 +34,8 @@ class ContextMasker:
             'other': 'OBJ',
             'physical_table': 'DB.TBL', 
             'dictionary': 'DB.DICT',
-            'path': 'PATH'
+            'path': 'PATH',
+            'entity_name': 'ENT_NAME'
         }
         logger.info("ContextMasker initialized (Scoped mode + DB/PATH formats)")
 

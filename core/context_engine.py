@@ -308,7 +308,7 @@ class OutputGenerator:
         # Правила маскирования: Таблица -> Колонка -> Категория маски
         self.mask_rules = {
             'datasets': {'dataset_id': 'dataset'},
-            'entities': {'entity_type': 'entity', 'entity_name': 'other'},
+            'entities': {'entity_type': 'entity', 'entity_name': 'entity_name'},
             'entity_properties': {'entity_type': 'entity', 'property_id': 'property'},
             'parameters': {'parameter_id': 'parameter'}, 
             'tables': {'table_id': 'table', 'physical_name': 'physical_table'},
