@@ -89,13 +89,33 @@ class ContextMasker:
     def mask_text(self, text: str) -> str:
         if not text: return ""
         
+        result = text
+        
+        # --- НАЧАЛО ИЗМЕНЕНИЙ ---
+        # 0. Приоритетная обработка для {текста} в фигурных скобках.
+        # Если слово внутри скобок известно как параметр, принудительно ставим маску PARAM.
+        def replace_param_in_braces(match):
+            content = match.group(1)
+            # Проверяем напрямую в изолированном реестре параметров
+            if content in self.scoped_registry.get('parameter', {}):
+                mask = self.scoped_registry['parameter'][content]
+                return f"{{{mask}}}"
+            return match.group(0)
+
+        # Заменяем {word} используя приоритет параметров
+        result = re.sub(r'\{([a-zA-Z0-9_]+)\}', replace_param_in_braces, result)
+        # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
         # Сортировка по длине критически важна:
         # "User.status" (длиннее) заменится раньше, чем "User" или "status"
         sorted_keys = sorted(self.map_forward.keys(), key=len, reverse=True)
-        result = text
         
         for real in sorted_keys:
             if not real: continue
+            
+            # Если слово уже было заменено на шаге 0 (например, стало {PARAM_1}),
+            # то основной цикл его не тронет, так как ищет оригинальное имя (например, "userId")
+            
             mask = self.map_forward[real]
             escaped_real = re.escape(real)
             
