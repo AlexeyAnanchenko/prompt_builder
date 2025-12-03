@@ -404,7 +404,17 @@ class OutputGenerator:
 
                     vals.append(self._format_val(val_to_write))
                 
-                values_rows.append(f"({', '.join(vals)})")
+                # ЛОГИКА ВЫБОРА ФОРМАТА
+                # Таблицы, содержащие код/формулы, форматируем с отступами
+                complex_tables = ['entity_properties', 'vertex_functions']
+                
+                if table in complex_tables:
+                    row_str = self._format_row_pretty(vals)
+                else:
+                    # Простые таблицы (parameters, entities, tables...) оставляем в одну строку
+                    row_str = f"({', '.join(vals)})"
+                
+                values_rows.append(row_str)
             
             if values_rows:
                 header = f"INSERT INTO {table} ({', '.join(cols)}) VALUES"
@@ -533,3 +543,55 @@ class OutputGenerator:
                  return '"' + val.replace('"', '\\"') + '"'
             return val
         return str(val)
+    
+    def _format_row_pretty(self, vals: List[str]) -> str:
+        """
+        Форматирует строку VALUES.
+        Колонки 0-4 (ключи, типы) группируются в одну строку.
+        Колонки 5+ (функции, конфиги) всегда переносятся на новую строку.
+        """
+        lines = []
+        current_line = "  " # Базовый отступ 2 пробела
+        
+        # Индексы колонок, которые всегда должны начинаться с новой строки
+        VERTICAL_START_INDEX = 5 
+        
+        for i, val in enumerate(vals):
+            is_last = (i == len(vals) - 1)
+            suffix = "" if is_last else ", "
+            
+            # 1. Если значение многострочное - переносим на новую строку
+            if '\n' in val:
+                # Сбрасываем накопленную строку
+                if current_line.strip() != "":
+                    lines.append(current_line.rstrip())
+                    current_line = "  "
+                
+                # ВАЖНО: Выводим значение как есть, без дополнительного replace.
+                # Отступ '  ' добавится только перед первой строкой (где открывающая кавычка).
+                # Остальные строки сохранят свое форматирование из БД.
+                val_strip = val.replace("    ", "  ")
+                lines.append(f"  {val_strip}{suffix}")
+                continue
+
+            # 2. Если это колонка логики (>= 5) - принудительно новая строка
+            if i >= VERTICAL_START_INDEX:
+                if current_line.strip() != "":
+                    lines.append(current_line.rstrip())
+                    current_line = "  "
+                
+                lines.append(f"  {val}{suffix}")
+                continue
+
+            # 3. Группировка коротких значений
+            if len(current_line) + len(val) > 100:
+                 lines.append(current_line.rstrip())
+                 current_line = f"  {val}{suffix}"
+            else:
+                 current_line += f"{val}{suffix}"
+        
+        # Дописываем остаток
+        if current_line.strip() != "":
+            lines.append(current_line.rstrip())
+            
+        return "(\n" + "\n".join(lines) + "\n)"
