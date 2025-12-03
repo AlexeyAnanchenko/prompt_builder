@@ -473,22 +473,6 @@ class OutputGenerator:
         for pk in self.context.get('entity_properties', []):
             self.masker.register(pk[2], 'entity') 
             self.masker.register(pk[3], 'property') 
-            
-        # 3. ВАЖНО: Регистрируем полные имена (FQN) как мануальный маппинг.
-        # Это создает пару "Entity.Property" -> "ENT_X.P_Y"
-        # mask_text выберет это совпадение первым, так как оно длиннее.
-        for pk in self.context.get('entity_properties', []):
-            entity_type = pk[2]
-            property_id = pk[3]
-            
-            # Получаем уже сгенерированные маски
-            masked_entity = self.masker.register(entity_type, 'entity')
-            masked_prop = self.masker.register(property_id, 'property')
-            
-            real_fqn = f"{entity_type}.{property_id}"
-            masked_fqn = f"{masked_entity}.{masked_prop}"
-            
-            self.masker.add_manual_mapping(real_fqn, masked_fqn)
 
         self._scan_arrays_in_parameters()
         self._scan_literals_in_functions()
