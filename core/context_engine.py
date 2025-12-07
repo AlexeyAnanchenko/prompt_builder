@@ -106,6 +106,7 @@ class ContextResolver:
         self._find_and_add_vertex(str(row.get('target_vertex')))
         self._process_constraints_list(row.get('constraints'))
         self._scan_json_config(row.get('config'))
+        self._scan_formula(row.get('condition')) 
 
     def _find_and_add_vertex(self, vertex_id_str):
         for pk in self.loader.db['vertices']:

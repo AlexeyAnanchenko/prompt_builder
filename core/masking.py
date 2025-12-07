@@ -13,6 +13,20 @@ class ContextMasker:
         self.counters: Dict[str, int] = defaultdict(int)
         # Сюда мы загрузим ID всех параметров перед генерацией
         self.known_parameters: Set[str] = set()
+
+        # Сюда входят имена агрегатных функций ClickHouse и другие ключевые слова
+        self.reserved_literals = {
+            # ClickHouse Aggregates (часто используются в arrayReduce)
+            'groupUniqArray', 'uniq', 'uniqExact', 'groupArray', 
+            'sum', 'min', 'max', 'avg', 'count', 'any', 'anyLast', 'argMin', 'argMax',
+            'topK', 'quantiles', 'quantilesExact', 'median',
+            # Типы данных (иногда бывают в строках)
+            'String', 'Int64', 'UInt64', 'Float64', 'Date', 'DateTime',
+            # Специальные значения (уже были в логике, но добавим явно)
+            'none', 'null', 'true', 'false', '', 
+            # Форматирование
+            'JSON', 'CSV', 'TSV'
+        }
         
         # --- Регулярки ---
         
@@ -186,29 +200,28 @@ class ContextMasker:
             return match.group(0)
         text = self.re_dot_prop.sub(replace_prop, text)
 
-        # 6. Литералы 'string' -> OBJ (с фильтрацией)
+        # 6. Литералы 'string' -> OBJ (С ИСПРАВЛЕНИЕМ)
         def replace_lit(match):
-            val = match.group(1) # содержимое без кавычек
+            val = match.group(1)
             
-            # Проверка на артефакты кода (если regex всё же ошибся)
-            if ')' in val or '(' in val or ',' in val and ' ' not in val:
-                 # Если это похоже на кусок кода, возвращаем как есть с кавычками
+            # А. Проверка на зарезервированные слова (функции ClickHouse и т.д.)
+            if val in self.reserved_literals:
+                return f"'{val}'"
+
+            # Б. Артефакты кода
+            if ')' in val or '(' in val or (',' in val and ' ' not in val):
                  return f"'{val}'"
 
-            # Проверка, известная ли это сущность/словарь (пункт 3)
-            # Если val выглядит как schema.table и мы хотим это маскировать
+            # В. Попытка определить DB.DICT по синтаксису "schema.name"
             if '.' in val and '_' in val and ' ' not in val:
-                 # organization.unit_hierarhy_dict -> DB.DICT
                  return f"'{self.register(val, 'DB.DICT')}'"
 
-            # Фильтр "мусора"
+            # Г. Фильтр мусора
             if not self._is_meaningful_string(val):
                 return f"'{val}'"
                 
-            # Проверка, не является ли это уже маской
             if val in self.map_reverse: return f"'{val}'"
             
-            # Маскируем как OBJ
             mask = self.register(val, 'OBJ')
             return f"'{mask}'"
 
