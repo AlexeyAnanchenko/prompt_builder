@@ -188,28 +188,33 @@ class ContextResolver:
                 return
 
     def _scan_json_config(self, config_obj):
-        data = self._get_json(config_obj)
-        if not data: return
-        def recursive_search(obj):
-            if isinstance(obj, dict):
-                if 'entity' in obj and 'property' in obj:
-                    self._find_and_add_property(obj['entity'], obj['property'])
-                if 'valueExpr' in obj:
-                    self._scan_formula(obj['valueExpr'])
-                if 'parameter' in obj:
-                    self._find_and_add_parameter(obj['parameter'])
-                if 'dataset' in obj:
-                    self.resolve_by_dataset(obj['dataset'])
-                for key in ['aggregation', 'limitation', 'ordering']:
-                    if key in obj and obj[key] != 'none':
-                         self._find_and_add_obj(key, obj[key])
-                if 'table' in obj:
-                    self._find_and_add_table_by_id(obj['table'])
-                for k, v in obj.items():
-                    recursive_search(v)
-            elif isinstance(obj, list):
-                for item in obj: recursive_search(item)
-        recursive_search(data)
+            data = self._get_json(config_obj)
+            if not data: return
+            
+            def recursive_search(obj):
+                if isinstance(obj, dict):
+                    if 'entity' in obj and 'property' in obj:
+                        self._find_and_add_property(obj['entity'], obj['property'])
+                    if 'valueExpr' in obj:
+                        self._scan_formula(obj['valueExpr'])
+                    if 'parameter' in obj:
+                        self._find_and_add_parameter(obj['parameter'])
+                    if 'dataset' in obj:
+                        self.resolve_by_dataset(obj['dataset'])
+                    
+                    for key in ['aggregation', 'limitation', 'ordering']:
+                        if key in obj:
+                            self._find_and_add_obj(key, obj[key])
+
+                    if 'table' in obj:
+                        self._find_and_add_table_by_id(obj['table'])
+                        
+                    for k, v in obj.items():
+                        recursive_search(v)
+                elif isinstance(obj, list):
+                    for item in obj: recursive_search(item)
+                    
+            recursive_search(data)
 
     def _find_and_add_parameter(self, param_id):
         for pk in self.loader.db['parameters']:
