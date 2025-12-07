@@ -332,6 +332,7 @@ class OutputGenerator:
         lines = []
         lines.append("SET SEARCH_PATH to qe_config;\n")
         
+        self._ensure_tenants_exist()
         self._prefill_masker()
 
         order = [
@@ -586,3 +587,34 @@ class OutputGenerator:
                  return '"' + val.replace('"', '\\"') + '"'
             return val
         return str(val)
+    
+    def _ensure_tenants_exist(self):
+        """
+        Проходит по всему собранному контексту, собирает встречающиеся tenant_id
+        и добавляет их определения из таблицы tenants в контекст.
+        """
+        used_tenant_ids = set()
+        
+        # Проходим по всем таблицам, попавшим в контекст
+        for table_name, pks in self.context.items():
+            # Пропускаем таблицы, где нет tenant_id или структура PK другая
+            if table_name in ['namespaces', 'tenants', 'clients']: 
+                continue
+                
+            for pk in pks:
+                # Согласно DbDataLoader, tenant_id почти везде идет вторым элементом (индекс 1)
+                # (namespace_id, tenant_id, id...)
+                if len(pk) >= 2:
+                    tenant_id = pk[1]
+                    used_tenant_ids.add(tenant_id)
+
+        # Если в контексте еще нет ключа для tenants, создаем его
+        if 'tenants' not in self.context:
+            self.context['tenants'] = set()
+
+        # Добавляем записи в контекст, если они есть в загруженной базе
+        for tid in used_tenant_ids:
+            # PK для таблицы tenants — это кортеж из одного элемента (tenant_id,)
+            tenant_pk = (tid,)
+            if tenant_pk in self.loader.db.get('tenants', {}):
+                self.context['tenants'].add(tenant_pk)
