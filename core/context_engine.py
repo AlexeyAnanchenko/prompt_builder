@@ -310,31 +310,111 @@ class OutputGenerator:
         self.context = context
         self.masker = masker
         
-        # Правила маскирования
-        self.mask_rules = {
-            'datasets': {'dataset_id': 'dataset'},
-            'entities': {'entity_type': 'entity', 'entity_name': 'entity_name'},
-            'entity_properties': {'entity_type': 'entity', 'property_id': 'property'},
-            'parameters': {'parameter_id': 'parameter'}, 
-            'tables': {'table_id': 'table', 'physical_name': 'physical_table'},
-            'table_fields': {'table_id': 'table', 'entity_type': 'entity', 'property_id': 'property', 'field_name': 'other'},
-            'vertex_functions': {'entity_type': 'entity', 'property_id': 'property'},
-            'composed_entities': {'composed_entity': 'entity', 'entity_type': 'entity'}
+        # Карта маскирования: Table -> Field -> Action/Category
+        # Action может быть: 
+        #   - строка 'CATEGORY': прямая замена через register(val, CATEGORY)
+        #   - 'JSON': обработка через mask_json
+        #   - 'FORMULA': обработка через mask_formula
+        #   - 'ARRAY_PATH': обработка массива путей
+        self.field_mapping = {
+            'tenants': {
+                'tenant_id': 'TEN',
+                'tenant_name': 'TEN_NAME'
+            },
+            'entities': {
+                'entity_type': 'ENT',
+                'entity_name': 'ENT_NAME'
+            },
+            'composed_entities': {
+                'composed_entity': 'ENT',
+                'entity_type': 'ENT'
+            },
+            'entity_properties': {
+                'entity_type': 'ENT',
+                'property_id': 'P',
+                'calculation_func': 'FORMULA',
+                'aggregation_func': 'FORMULA',
+                'conversion_func': 'FORMULA'
+            },
+            'parameters': {
+                'parameter_id': 'PARAM',
+                'request_path': 'ARRAY_PATH'
+            },
+            'datasets': {
+                'dataset_id': 'DS',
+                'entity_type': 'ENT',
+                'config': 'JSON'
+            },
+            'tables': {
+                'table_id': 'TBL',
+                'physical_name': 'DB.TBL'
+            },
+            'table_fields': {
+                'table_id': 'TBL',
+                'entity_type': 'ENT',
+                'property_id': 'P',
+                'field_name': 'COL'
+            },
+            'vertices': {
+                'config': 'JSON',
+                'constraints': 'JSON' # constraints здесь часто просто список ID, но если JSON - сработает
+            },
+            'edges': {
+                'condition': 'FORMULA',
+                'config': 'JSON'
+            },
+            'vertex_functions': {
+                'entity_type': 'ENT',
+                'property_id': 'P',
+                'calculation_func': 'FORMULA',
+                'aggregation_func': 'FORMULA'
+            },
+            'constraints': {
+                'entity_type': 'ENT',
+                'property_id': 'P',
+                'config': 'JSON',
+                'condition': 'FORMULA'
+            },
+            'composed_constraints': {
+                'condition': 'FORMULA'
+            },
+            'filters': {
+                'config': 'JSON'
+            },
+            'aggregation': {'aggregation_id': 'AGG'},
+            'limitation': {'limitation_id': 'LIM'},
+            'ordering': {'ordering_id': 'ORD'},
+            'group_by': {'entity_type': 'ENT', 'property_id': 'P'},
+            'order_by': {'entity_type': 'ENT', 'property_id': 'P'}
         }
+
+    def _ensure_tenants_exist(self):
+        """Подтягиваем определения тенантов."""
+        used_ids = set()
+        for table, pks in self.context.items():
+            if table in ['namespaces', 'tenants', 'clients']: continue
+            for pk in pks:
+                if len(pk) >= 2 and pk[1]: # pk[1] is tenant_id
+                    used_ids.add(pk[1])
         
-        self.text_process_fields = [
-            'config', 'calculation_func', 'aggregation_func', 'condition', 'expression', 'conversion_func', 'request_path'
-        ]
-        
-        self.array_fields = ['request_path']
+        if 'tenants' not in self.context:
+            self.context['tenants'] = set()
+            
+        # Добавляем пустой/дефолтный тенант, если он есть в базе
+        used_ids.add('') 
+            
+        for tid in used_ids:
+            pk = (tid,)
+            if pk in self.loader.db.get('tenants', {}):
+                self.context['tenants'].add(pk)
 
     def generate_sql(self) -> str:
         lines = []
         lines.append("SET SEARCH_PATH to qe_config;\n")
         
         self._ensure_tenants_exist()
-        self._prefill_masker()
-
+        
+        # Порядок вставки важен для целостности ссылок
         order = [
             'namespaces', 'tenants', 'clients',
             'parameters',
@@ -352,59 +432,66 @@ class OutputGenerator:
             
             lines.append(f"-- {table} ({len(pks)})")
             
+            # Определяем колонки
             cols = self.loader.table_cols.get(table, [])
-            if not cols: 
+            if not cols and pks:
                 first = next(iter(pks))
                 cols = list(self.loader.db[table][first].keys())
+                
+            # Получаем правила маппинга для текущей таблицы
+            table_map = self.field_mapping.get(table, {})
 
             sorted_pks = sorted(list(pks))
             values_rows = []
             
             for pk in sorted_pks:
                 if pk not in self.loader.db[table]: continue
-
                 row = self.loader.db[table][pk]
+                
                 vals = []
-                for c in cols:
-                    original_val = row.get(c)
-                    val_to_write = original_val
+                for col in cols:
+                    val = row.get(col)
+                    val_to_write = val
                     
-                    if self.masker:
-                        if c in self.array_fields and original_val is not None:
-                            elements = self._normalize_array_value(original_val)
-                            masked_elements = []
-                            for elem in elements:
-                                if not elem: continue
-                                masked_elements.append(self.masker.register(elem, 'path'))
-                            val_to_write = masked_elements
-
-                        elif table in self.mask_rules and c in self.mask_rules[table]:
-                            category = self.mask_rules[table][c]
-                            if isinstance(original_val, str) and original_val:
-                                val_to_write = self.masker.register(original_val, category)
+                    # --- ЛОГИКА МАСКИРОВАНИЯ ---
+                    if self.masker and val is not None:
+                        action = table_map.get(col)
                         
-                        elif c in self.text_process_fields:
-                            if isinstance(original_val, str):
-                                val_to_write = self.masker.mask_text(original_val)
-                            elif isinstance(original_val, dict):
-                                s = json.dumps(original_val, ensure_ascii=False)
-                                masked_s = self.masker.mask_text(s)
-                                try:
-                                    val_to_write = json.loads(masked_s)
-                                except:
-                                    val_to_write = masked_s
-                            elif isinstance(original_val, list):
-                                masked_list = []
-                                for item in original_val:
-                                    if isinstance(item, str):
-                                        masked_list.append(self.masker.mask_text(item))
-                                    else:
-                                        masked_list.append(item)
-                                val_to_write = masked_list
+                        if action == 'JSON':
+                            # Парсим JSON -> Маскируем -> Собираем обратно
+                            try:
+                                if isinstance(val, str):
+                                    json_obj = json.loads(val)
+                                    masked_obj = self.masker.mask_json(json_obj)
+                                    val_to_write = json.dumps(masked_obj, ensure_ascii=False)
+                                elif isinstance(val, (dict, list)):
+                                    masked_obj = self.masker.mask_json(val)
+                                    val_to_write = json.dumps(masked_obj, ensure_ascii=False)
+                            except:
+                                # Если не парсится, считаем текстом
+                                val_to_write = self.masker.mask_text(str(val))
+                                
+                        elif action == 'FORMULA':
+                            if isinstance(val, str):
+                                val_to_write = self.masker.mask_formula(val)
+                                
+                        elif action == 'ARRAY_PATH':
+                            # Специфично для параметров: массив путей
+                            arr = self._parse_array(val)
+                            masked_arr = [self.masker.register(x, 'PATH') for x in arr]
+                            val_to_write = masked_arr # _format_val обработает список
+                            
+                        elif action and action not in ['JSON', 'FORMULA', 'ARRAY_PATH']:
+                            # Прямая замена по категории (ENT, TBL, P...)
+                            if isinstance(val, str) and val:
+                                val_to_write = self.masker.register(val, action)
+                                
+                    # --- КОНЕЦ МАСКИРОВАНИЯ ---
 
                     vals.append(self._format_val(val_to_write))
                 
-                complex_tables = ['entity_properties', 'vertex_functions']
+                # Форматирование вывода
+                complex_tables = ['entity_properties', 'vertex_functions', 'limitation']
                 if table in complex_tables:
                     row_str = self._format_row_pretty(vals)
                 else:
@@ -416,205 +503,99 @@ class OutputGenerator:
                 header = f"INSERT INTO {table} ({', '.join(cols)}) VALUES"
                 body = ",\n".join(values_rows)
                 lines.append(f"{header}\n{body};")
-                
+            
             lines.append("")
             
         return "\n".join(lines)
-    
-    def _format_row_pretty(self, vals: List[str]) -> str:
-        lines = []
-        current_line = "  "
-        VERTICAL_START_INDEX = 5 
-        
-        for i, val in enumerate(vals):
-            is_last = (i == len(vals) - 1)
-            suffix = "" if is_last else ", "
-            
-            if '\n' in val:
-                if current_line.strip() != "":
-                    lines.append(current_line.rstrip())
-                    current_line = "  "
-                replace_space_val = val.replace("    ", "  ")
-                lines.append(f"  {replace_space_val}{suffix}")
-                continue
 
-            if i >= VERTICAL_START_INDEX:
-                if current_line.strip() != "":
-                    lines.append(current_line.rstrip())
-                    current_line = "  "
-                lines.append(f"  {val}{suffix}")
-                continue
-
-            if len(current_line) + len(val) > 100:
-                 lines.append(current_line.rstrip())
-                 current_line = f"  {val}{suffix}"
-            else:
-                 current_line += f"{val}{suffix}"
-        
-        if current_line.strip() != "":
-            lines.append(current_line.rstrip())
-            
-        return "(\n" + "\n".join(lines) + "\n)"
-
-    def _prefill_masker(self):
-        """Регистрируем сущности в их категориях (Scope)."""
-        if not self.masker: return
-        
-        # 1. Сначала параметры и прочие базовые элементы
-        for pk in self.context.get('parameters', []):
-            self.masker.register(pk[2], 'parameter')
-            
-        for pk in self.context.get('datasets', []):
-            self.masker.register(pk[2], 'dataset')
-            
-        for pk in self.context.get('tables', []):
-            self.masker.register(pk[2], 'table')
-
-        for pk in self.context.get('entities', []):
-            self.masker.register(pk[2], 'entity')
-            
-        # 2. Свойства регистрируем ПОЗЖЕ параметров, чтобы в глобальном словаре
-        # короткое имя (например 'status') перезаписалось как P_... 
-        # (так как в SQL контексте bare words - это колонки)
-        for pk in self.context.get('entity_properties', []):
-            self.masker.register(pk[2], 'entity') 
-            self.masker.register(pk[3], 'property') 
-
-        self._scan_arrays_in_parameters()
-        self._scan_literals_in_functions()
-
-    def _normalize_array_value(self, val: Union[str, List, Any]) -> List[str]:
-        if isinstance(val, list):
-            return [str(v) for v in val if v is not None]
-        
-        if isinstance(val, str):
-            val = val.strip()
-            if val.startswith('{') and val.endswith('}'):
-                content = val[1:-1]
-                if not content: return []
-                parts = content.split(',')
-                normalized = []
-                for p in parts:
-                    p = p.strip()
-                    if len(p) >= 2 and ((p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'"))):
-                        p = p[1:-1]
-                    if p: normalized.append(p)
-                return normalized
+    def _parse_array(self, val) -> List[str]:
+        """Парсит строковое представление массива SQL."""
+        if isinstance(val, list): return [str(x) for x in val if x]
+        if not isinstance(val, str): return []
+        val = val.strip()
+        if val.startswith('{') and val.endswith('}'):
+            content = val[1:-1]
+            if not content: return []
+            # Простой сплит по запятой (для сложных случаев нужен csv reader, но пока так)
+            parts = content.split(',')
+            res = []
+            for p in parts:
+                p = p.strip()
+                # Удаляем кавычки если есть
+                if len(p) >= 2 and (p[0] in '"\'' and p[-1] in '"\''):
+                    p = p[1:-1]
+                if p: res.append(p)
+            return res
         return []
-
-    def _scan_arrays_in_parameters(self):
-        for pk in self.context.get('parameters', []):
-            row = self.loader.db['parameters'].get(pk)
-            if not row: continue
-            
-            for field in ['request_path', 'parameter_id']:
-                val = row.get(field)
-                if not val: continue
-                
-                elements = self._normalize_array_value(val)
-                for item in elements:
-                    if not item: continue
-                    if field == 'request_path':
-                        self.masker.register(item, 'path')
-                    elif field == 'parameter_id':
-                        self.masker.register(item, 'parameter')
-                    else:
-                        self.masker.register(item, 'other')
-
-    def _scan_literals_in_functions(self):
-        scan_fields = ['calculation_func', 'aggregation_func', 'conversion_func', 'expression', 'condition', 'config']
-        
-        dict_col_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*(?:'[^']+'|[\w\.]+)\s*,\s*'([\w.]+)'", re.DOTALL)
-        dict_tuple_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*(?:'[^']+'|[\w\.]+)\s*,\s*tuple\s*\((.*?)\)", re.DOTALL)
-        dict_name_regex = re.compile(r"dict(?:Get|Has)\w*\s*\(\s*'([\w.]+)'", re.DOTALL)
-        literal_regex = re.compile(r"'([\w.]+)'")
-
-        def scan_row(row: Dict[str, Any]):
-            for field in scan_fields:
-                val = row.get(field)
-                if isinstance(val, str) and val:
-                    
-                    dict_names = dict_name_regex.findall(val)
-                    for m in dict_names:
-                        if m: self.masker.register(m, 'dictionary')
-
-                    cols_single = dict_col_regex.findall(val)
-                    for m in cols_single:
-                        if m: self.masker.register(m, 'column')
-
-                    cols_tuple_content = dict_tuple_regex.findall(val)
-                    for content in cols_tuple_content:
-                        tuple_literals = literal_regex.findall(content)
-                        for m in tuple_literals:
-                            if m: self.masker.register(m, 'column')
-
-                    matches = literal_regex.findall(val)
-                    for m in matches:
-                        if m:
-                            if (m in self.masker.scoped_registry['dictionary'] or 
-                                m in self.masker.scoped_registry['column']):
-                                continue
-                            
-                            category = 'physical_table' if '.' in m else 'other'
-                            self.masker.register(m, category)
-
-        for table in ['entity_properties', 'vertex_functions', 'constraints']:
-            for pk in self.context.get(table, []):
-                if pk in self.loader.db[table]:
-                    scan_row(self.loader.db[table][pk])
 
     def _format_val(self, val: Any) -> str:
         if val is None: return "null"
         if isinstance(val, bool): return "true" if val else "false"
         if isinstance(val, (int, float)): return str(val)
         if isinstance(val, list):
-            safe_list = [x for x in val if x is not None]
-            formatted_list = [self._format_val_inner(x) for x in safe_list]
-            return "'{" + ", ".join(formatted_list) + "}'"
+            safe_list = [str(x) for x in val if x is not None]
+            # Формируем SQL массив: {'val1', 'val2'}
+            formatted_list = []
+            for x in safe_list:
+                # Экранируем одинарные кавычки для SQL
+                escaped = x.replace("'", "''") 
+                formatted_list.append(f"'{escaped}'" if not x.startswith("'") else x) # если уже в кавычках (от маскера), не трогаем? 
+                # Нет, маскер возвращает просто строку маски. Надо кавычить.
+            # Но подождите, маскер формул возвращает строку с кавычками.
+            # Здесь список строк (PATH). Они "чистые".
+            return "'{" + ", ".join([f'"{x}"' for x in safe_list]) + "}'" 
+            
         if isinstance(val, dict):
             json_str = json.dumps(val, ensure_ascii=False)
             escaped = json_str.replace("'", "''")
             return f"'{escaped}'"
-        if isinstance(val, (datetime.date, datetime.datetime)): return f"'{str(val)}'"
+            
         if isinstance(val, str):
+            # Проверка, не является ли это уже SQL выражением (например, от mask_formula)
+            # mask_formula возвращает строку, которая МОЖЕТ содержать кавычки, переносы строк и т.д.
+            # НО generate_sql ожидает здесь raw value, которое нужно обернуть в кавычки SQL.
+            
+            # ВАЖНО: Если mask_formula вернула что-то сложное, мы все равно должны вставить это как строку в INSERT.
+            # Поэтому экранируем кавычки.
             escaped = val.replace("'", "''")
             return f"'{escaped}'"
+            
         return f"'{str(val)}'"
+
+    def _format_row_pretty(self, vals: List[str]) -> str:
+        # Улучшенное форматирование для читаемости
+        lines = []
+        current_line = "  "
+        VERTICAL_START = 5
         
-    def _format_val_inner(self, val):
-        if isinstance(val, str):
-            if any(c in val for c in [',', '"', ' ', '{', '}']):
-                 return '"' + val.replace('"', '\\"') + '"'
-            return val
-        return str(val)
-    
-    def _ensure_tenants_exist(self):
-        """
-        Проходит по всему собранному контексту, собирает встречающиеся tenant_id
-        и добавляет их определения из таблицы tenants в контекст.
-        """
-        used_tenant_ids = set()
-        
-        # Проходим по всем таблицам, попавшим в контекст
-        for table_name, pks in self.context.items():
-            # Пропускаем таблицы, где нет tenant_id или структура PK другая
-            if table_name in ['namespaces', 'tenants', 'clients']: 
+        for i, val in enumerate(vals):
+            is_last = (i == len(vals) - 1)
+            suffix = "" if is_last else ", "
+            
+            # Если значение содержит переводы строк (функции), форматируем блоком
+            if '\n' in val:
+                if current_line.strip():
+                    lines.append(current_line.rstrip())
+                    current_line = "  "
+                replace_space_val = val.replace("    ", "  ")
+                lines.append(f"  {replace_space_val}{suffix}")
                 continue
-                
-            for pk in pks:
-                # Согласно DbDataLoader, tenant_id почти везде идет вторым элементом (индекс 1)
-                # (namespace_id, tenant_id, id...)
-                if len(pk) >= 2:
-                    tenant_id = pk[1]
-                    used_tenant_ids.add(tenant_id)
 
-        # Если в контексте еще нет ключа для tenants, создаем его
-        if 'tenants' not in self.context:
-            self.context['tenants'] = set()
+            if i >= VERTICAL_START:
+                if current_line.strip():
+                    lines.append(current_line.rstrip())
+                lines.append(f"  {val}{suffix}")
+                current_line = "" # Сброс, чтобы следующая итерация добавила отступ
+                continue
 
-        # Добавляем записи в контекст, если они есть в загруженной базе
-        for tid in used_tenant_ids:
-            # PK для таблицы tenants — это кортеж из одного элемента (tenant_id,)
-            tenant_pk = (tid,)
-            if tenant_pk in self.loader.db.get('tenants', {}):
-                self.context['tenants'].add(tenant_pk)
+            # Компактная запись для первых полей
+            if len(current_line) + len(val) > 120:
+                 lines.append(current_line.rstrip())
+                 current_line = f"  {val}{suffix}"
+            else:
+                 current_line += f"{val}{suffix}"
+        
+        if current_line.strip():
+            lines.append(current_line.rstrip())
+            
+        return "(\n" + "\n".join(lines) + "\n)"

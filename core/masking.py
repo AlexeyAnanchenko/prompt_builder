@@ -1,151 +1,195 @@
 import re
+import json
 from collections import defaultdict
-from typing import Dict, List, Optional
-from utils.logger import setup_logger
-
-logger = setup_logger(__name__)
+from typing import Dict, Any, List, Optional, Union
 
 class ContextMasker:
     def __init__(self):
-        self.map_forward: Dict[str, str] = {}
+        # forward: {(category, real_value): mask_id}
+        self.map_forward: Dict[tuple, str] = {}
+        # reverse: {mask_id: real_value}
         self.map_reverse: Dict[str, str] = {}
+        # счетчики для каждой категории (ENT -> 1, P -> 1...)
+        self.counters: Dict[str, int] = defaultdict(int)
         
-        # Изолированный реестр
-        self.scoped_registry: Dict[str, Dict[str, str]] = defaultdict(dict)
+        # --- Регулярки для формул ---
         
-        # Запоминаем, какая категория "владеет" текущим маппингом в map_forward
-        self.map_owner: Dict[str, str] = {}
+        # 1. dictGet с кортежем: dictGet('dict', tuple('c1', 'c2'), ...)
+        # Группа 1: имя словаря, Группа 2: содержимое кортежа
+        self.re_dict_tuple = re.compile(r"dictGet\s*\(\s*'([^']+)'\s*,\s*tuple\s*\((.*?)\)", re.DOTALL)
+        
+        # 2. dictGet одиночный: dictGet('dict', 'col', ...)
+        self.re_dict_single = re.compile(r"dictGet\s*\(\s*'([^']+)'\s*,\s*'([^']+)'", re.DOTALL)
+        
+        # 3. Параметры: {paramName}
+        self.re_param = re.compile(r'\{([a-zA-Z0-9_]+)\}')
+        
+        # 4. Свойства через точку: Entity.Property
+        # Ищем слова, разделенные точкой, где левая часть не начинается с цифры
+        self.re_dot_prop = re.compile(r"\b([a-zA-Z][a-zA-Z0-9_]*)\.([a-zA-Z0-9_]+)\b")
+        
+        # 5. Литералы в кавычках: 'value'
+        self.re_literal = re.compile(r"'([^']+)'")
 
-        self.counters = {
-            'dataset': 1, 'entity': 1, 'property': 1,
-            'table': 1, 'parameter': 1, 'other': 1,
-            'physical_table': 1, 'dictionary': 1,
-            'path': 1, 'entity_name': 1, 'column': 1
-        }
-        
-        self.prefixes = {
-            'dataset': 'DS', 'entity': 'ENT', 'property': 'P', 
-            'table': 'TBL', 'parameter': 'PARAM', 'other': 'OBJ',
-            'physical_table': 'DB.TBL', 'dictionary': 'DB.DICT',
-            'path': 'PATH', 'entity_name': 'ENT_NAME', 'column': 'COL'
-        }
-        
-        # --- НОВОЕ: Приоритеты категорий ---
-        # Чем выше число, тем сложнее перезаписать этот тип.
-        # Property (90) не даст себя перезаписать Path (10).
-        self.category_priority = {
-            'entity': 100,
-            'property': 90,
-            'parameter': 80,
-            'dataset': 60,
-            'table': 50,
-            'dictionary': 40,
-            'path': 10,       # Низкий приоритет, так как часто пересекается с пропертями
-            'other': 0
-        }
-        
-        logger.info("ContextMasker initialized (Scoped + Priority Support)")
+    def clear(self):
+        self.map_forward.clear()
+        self.map_reverse.clear()
+        self.counters.clear()
 
-    def register(self, real_name: str, category: str = 'other') -> str:
-        if not real_name: return str(real_name)  
-        real_name_str = str(real_name)
+    def register(self, value: Any, category: str) -> str:
+        """
+        Регистрирует значение в реестре и возвращает маску.
+        Если значение уже есть для этой категории, возвращает существующую маску.
+        """
+        if value is None:
+            return "null"
         
-        # 1. Логика Scoped Registry (получаем маску для конкретной категории)
-        if real_name_str in self.scoped_registry[category]:
-            masked_name = self.scoped_registry[category][real_name_str]
-        else:
-            idx = self.counters.get(category, 1)
-            self.counters[category] += 1
-            prefix = self.prefixes.get(category, 'OBJ')
-            masked_name = f"{prefix}_{idx}"
-            self.scoped_registry[category][real_name_str] = masked_name
+        val_str = str(value)
+        if not val_str:
+            return val_str
+            
+        key = (category, val_str)
         
-        # 2. Логика обновления глобального словаря с учетом ПРИОРИТЕТОВ
-        current_owner = self.map_owner.get(real_name_str)
-        new_prio = self.category_priority.get(category, 0)
+        if key in self.map_forward:
+            return self.map_forward[key]
         
-        should_update = False
+        # Создаем новую маску
+        self.counters[category] += 1
+        # Формат: PREFIX_N (например ENT_1, P_5)
+        mask = f"{category}_{self.counters[category]}"
         
-        if current_owner is None:
-            # Если записи нет - пишем смело
-            should_update = True
-        else:
-            old_prio = self.category_priority.get(current_owner, 0)
-            # Обновляем только если новая категория важнее или равна по важности
-            # Например: Property(90) >= Path(10) -> FALSE (не обновляем)
-            # Например: Path(10) >= Property(90) -> FALSE
-            # Правильно: если мы сейчас регистрируем Property, а было Path -> обновляем.
-            if new_prio >= old_prio:
-                should_update = True
+        self.map_forward[key] = mask
+        self.map_reverse[mask] = val_str
         
-        if should_update:
-            self.map_forward[real_name_str] = masked_name
-            self.map_reverse[masked_name] = real_name_str
-            self.map_owner[real_name_str] = category
-        
-        return masked_name
-
-    def add_manual_mapping(self, real_name: str, masked_name: str):
-        if not real_name or not masked_name: return
-        self.map_forward[real_name] = masked_name
-        self.map_reverse[masked_name] = real_name
-        # Ручной маппинг считаем наивысшим приоритетом
-        self.map_owner[real_name] = 'manual'
-
-    def get_known_mask(self, real_name: str, priority_categories: List[str]) -> Optional[str]:
-        real_name_str = str(real_name)
-        for cat in priority_categories:
-            if real_name_str in self.scoped_registry[cat]:
-                return self.scoped_registry[cat][real_name_str]
-        return None
+        return mask
 
     def mask_text(self, text: str) -> str:
+        """Для маскирования обычного текста (системный промпт, запрос пользователя)."""
         if not text: return ""
+        # Простой проход по всем известным значениям (от длинных к коротким)
+        # Это упрощенный вариант, для SQL используется mask_formula
+        sorted_items = sorted(self.map_forward.items(), key=lambda x: len(x[0][1]), reverse=True)
+        masked_text = text
+        for (cat, val), mask in sorted_items:
+            # Заменяем только полные слова, чтобы 'id' не заменил часть 'android'
+            pattern = r'\b' + re.escape(val) + r'\b'
+            masked_text = re.sub(pattern, mask, masked_text)
+        return masked_text
+
+    def mask_json(self, data: Any) -> Any:
+        """Рекурсивно маскирует значения в JSON, основываясь на ключах."""
+        if isinstance(data, dict):
+            new_dict = {}
+            for k, v in data.items():
+                category = self._infer_json_category(k)
+                
+                if k in ['valueExpr', 'condition', 'expression'] and isinstance(v, str):
+                     new_dict[k] = self.mask_formula(v)
+                elif category and isinstance(v, str):
+                    new_dict[k] = self.register(v, category)
+                elif isinstance(v, (dict, list)):
+                    new_dict[k] = self.mask_json(v)
+                else:
+                    new_dict[k] = v
+            return new_dict
+        elif isinstance(data, list):
+            return [self.mask_json(item) for item in data]
+        return data
+
+    def _infer_json_category(self, key: str) -> Optional[str]:
+        """Определяет категорию маски по ключу JSON."""
+        mapping = {
+            'entity': 'ENT', 'entity_type': 'ENT',
+            'property': 'P', 'property_id': 'P', 'operator': None, # операторы не маскируем
+            'parameter': 'PARAM',
+            'dataset': 'DS',
+            'ordering': 'ORD',
+            'limitation': 'LIM',
+            'aggregation': 'AGG',
+            'table': 'TBL'
+        }
+        return mapping.get(key)
+
+    def mask_formula(self, text: str) -> str:
+        """
+        Умное маскирование SQL/ClickHouse выражений.
+        Порядок важен! Сначала специфичные функции, потом общие литералы.
+        """
+        if not text: return text
         
-        result = text
+        # 1. dictGet с TUPLE: dictGet('dict', tuple('c1', 'c2')...)
+        def replace_tuple_dict(match):
+            d_name = match.group(1)
+            tuple_content = match.group(2)
+            
+            mask_d = self.register(d_name, 'DB.DICT')
+            
+            # Внутри кортежа заменяем все литералы '...' на COL
+            def replace_col_item(m):
+                col_val = m.group(1)
+                # Если пустая строка, оставляем как есть
+                if not col_val: return "''"
+                return f"'{self.register(col_val, 'COL')}'"
+            
+            masked_content = self.re_literal.sub(replace_col_item, tuple_content)
+            return f"dictGet('{mask_d}', tuple({masked_content})"
+
+        text = self.re_dict_tuple.sub(replace_tuple_dict, text)
+
+        # 2. dictGet одиночный: dictGet('dict', 'col')
+        def replace_single_dict(match):
+            d_name = match.group(1)
+            c_name = match.group(2)
+            mask_d = self.register(d_name, 'DB.DICT')
+            mask_c = self.register(c_name, 'COL')
+            return f"dictGet('{mask_d}', '{mask_c}'"
+            
+        text = self.re_dict_single.sub(replace_single_dict, text)
         
-        # Приоритетная обработка {PARAM}
-        def replace_param_in_braces(match):
-            content = match.group(1)
-            if content in self.scoped_registry.get('parameter', {}):
-                mask = self.scoped_registry['parameter'][content]
-                return f"{{{mask}}}"
+        # 3. Параметры {param}
+        def replace_param(match):
+            p_val = match.group(1)
+            return f"{{{self.register(p_val, 'PARAM')}}}"
+        
+        text = self.re_param.sub(replace_param, text)
+        
+        # 4. Entity.Property
+        def replace_prop(match):
+            left = match.group(1)
+            right = match.group(2)
+            
+            # Эвристика: если левая часть уже известна как ENT или выглядит как ENT
+            # (Проверяем наличие в реестре с категорией ENT или TBL)
+            is_entity = (('ENT', left) in self.map_forward) or (('TBL', left) in self.map_forward)
+            
+            # Если мы точно знаем, что left это сущность, маскируем
+            if is_entity:
+                # Пытаемся взять существующую маску, если нет - создаем ENT
+                # Но если это TBL, берем TBL. Приоритет у ENT для свойств.
+                cat = 'ENT' if ('ENT', left) in self.map_forward else 'TBL'
+                mask_l = self.register(left, cat)
+                mask_r = self.register(right, 'P')
+                return f"{mask_l}.{mask_r}"
+            
+            # Если это функции типа date_diff(DAY, ...), их трогать нельзя
+            # Можно добавить список исключений, если будет нужно.
             return match.group(0)
 
-        result = re.sub(r'\{([a-zA-Z0-9_]+)\}', replace_param_in_braces, result)
+        text = self.re_dot_prop.sub(replace_prop, text)
 
-        sorted_keys = sorted(self.map_forward.keys(), key=len, reverse=True)
-        for real in sorted_keys:
-            if not real: continue
-            mask = self.map_forward[real]
-            escaped_real = re.escape(real)
+        # 5. Остальные литералы 'string' -> OBJ
+        def replace_lit(match):
+            val = match.group(1)
+            # Если это уже похоже на нашу маску (например содержит _\d+), пропускаем
+            if val in self.map_reverse:
+                return f"'{val}'"
             
-            if re.match(r'^\w+$', real):
-                pattern = re.compile(rf'\b{escaped_real}\b')
-            else:
-                pattern = re.compile(escaped_real)
-                
-            new_text, n = pattern.subn(mask, result)
-            if n > 0:
-                result = new_text
-        return result
+            # Проверяем, не является ли это системным словом 'none' в контексте значений
+            # Если 'none', маскируем как OBJ (согласно CSV)
+            
+            mask = self.register(val, 'OBJ')
+            return f"'{mask}'"
 
-    def unmask_text(self, text: str) -> str:
-        if not text: return ""
-        sorted_keys = sorted(self.map_reverse.keys(), key=len, reverse=True)
-        result = text
-        for mask in sorted_keys:
-            real = self.map_reverse[mask]
-            pattern = re.compile(rf'\b{re.escape(mask)}\b')
-            new_text, n = pattern.subn(real, result)
-            if n > 0:
-                result = new_text
-        return result
+        text = self.re_literal.sub(replace_lit, text)
         
-    def clear(self):
-        self.map_forward = {}
-        self.map_reverse = {}
-        self.map_owner = {}
-        self.scoped_registry = defaultdict(dict)
-        for k in self.counters: self.counters[k] = 1
-        logger.info("ContextMasker cleared")
+        return text
