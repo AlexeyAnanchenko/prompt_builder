@@ -228,13 +228,59 @@ class ContextResolver:
 
     def _scan_formula(self, formula: Optional[str]):
         if not formula: return
+        
+        # 1. SQL-style: Entity.Property
         matches = self.prop_regex.findall(formula)
         for entity_type, prop_id in matches:
             if self._is_valid_property(entity_type, prop_id):
                 self._find_and_add_property(entity_type, prop_id)
+        
+        # 2. SQL-style Params: {param}
         params = self.param_regex.findall(formula)
         for p_id in params:
             self._find_and_add_parameter(p_id)
+
+        # 3. Java-style Params: param != null (Добавлено)
+        self._scan_java_condition(formula)
+
+    def _scan_java_condition(self, condition: str):
+        """Ищет параметры, используемые без фигурных скобок (Java syntax)."""
+        # Простое разбиение по словам. Если слово совпадает с известным параметром в БД -> добавляем.
+        # Так как мы не можем загрузить ВСЕ параметры в память сразу, 
+        # нам придется делать запрос или надеяться, что параметр уже был найден ранее?
+        # Правильный подход: Найти слова-кандидаты и проверить их наличие в таблице parameters.
+        
+        words = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', condition)
+        ignore_keywords = {'null', 'true', 'false', 'equals', 'not', 'and', 'or', 'if', 'else', 'return'}
+        
+        candidates = set(words) - ignore_keywords
+        if not candidates: return
+
+        # Проверяем кандидатов в БД (оптимизированный запрос)
+        if hasattr(self.loader, 'check_parameters_exist'):
+             # Если лоадер умеет проверять
+             pass
+        else:
+             # Иначе проверяем по загруженному кэшу лоадера. 
+             # Но лоадер грузит только то, что мы просим.
+             # Здесь проблема курицы и яйца. 
+             # В Step 2 мы сначала грузим контекст, а резолвер работает с загруженным.
+             # Если параметр еще не загружен, мы его не найдем в self.loader.db['parameters'].
+             # В рамках текущей архитектуры (DbDataLoader грузит всё сразу по namespace?),
+             # мы можем проверить self.loader.db['parameters'].
+             
+             for param_id in candidates:
+                 # Ищем param_id среди всех ключей параметров
+                 # pk = (ns, tenant, param_id)
+                 found = False
+                 for pk in self.loader.db['parameters']:
+                     if pk[2] == param_id:
+                         self.context['parameters'].add(pk)
+                         found = True
+                 # Если не нашли в кэше, это может быть пропуск. 
+                 # Но обычно DbDataLoader загружает parameters полностью для namespace?
+                 # Если нет, то тут нужен до-запрос в БД.
+                 pass
 
     def _is_valid_property(self, entity, prop):
         for pk in self.loader.db['entity_properties']:
@@ -317,72 +363,25 @@ class OutputGenerator:
         #   - 'FORMULA': обработка через mask_formula
         #   - 'ARRAY_PATH': обработка массива путей
         self.field_mapping = {
-            'tenants': {
-                'tenant_id': 'TEN',
-                'tenant_name': 'TEN_NAME'
-            },
-            'entities': {
-                'entity_type': 'ENT',
-                'entity_name': 'ENT_NAME'
-            },
-            'composed_entities': {
-                'composed_entity': 'ENT',
-                'entity_type': 'ENT'
-            },
+            'tenants': {'tenant_id': 'TEN', 'tenant_name': 'TEN_NAME'},
+            'entities': {'entity_type': 'ENT', 'entity_name': 'ENT_NAME'},
+            'composed_entities': {'composed_entity': 'ENT', 'entity_type': 'ENT'},
             'entity_properties': {
-                'entity_type': 'ENT',
-                'property_id': 'P',
-                'calculation_func': 'FORMULA',
-                'aggregation_func': 'FORMULA',
-                'conversion_func': 'FORMULA'
+                'entity_type': 'ENT', 'property_id': 'P',
+                'calculation_func': 'FORMULA', 'aggregation_func': 'FORMULA', 'conversion_func': 'FORMULA'
             },
-            'parameters': {
-                'parameter_id': 'PARAM',
-                'request_path': 'ARRAY_PATH'
-            },
-            'datasets': {
-                'dataset_id': 'DS',
-                'entity_type': 'ENT',
-                'config': 'JSON'
-            },
-            'tables': {
-                'table_id': 'TBL',
-                'physical_name': 'DB.TBL'
-            },
-            'table_fields': {
-                'table_id': 'TBL',
-                'entity_type': 'ENT',
-                'property_id': 'P',
-                'field_name': 'COL'
-            },
-            'vertices': {
-                'config': 'JSON',
-                'constraints': 'JSON' # constraints здесь часто просто список ID, но если JSON - сработает
-            },
-            'edges': {
-                'condition': 'FORMULA',
-                'config': 'JSON'
-            },
-            'vertex_functions': {
-                'entity_type': 'ENT',
-                'property_id': 'P',
-                'calculation_func': 'FORMULA',
-                'aggregation_func': 'FORMULA'
-            },
-            'constraints': {
-                'entity_type': 'ENT',
-                'property_id': 'P',
-                'config': 'JSON',
-                'condition': 'FORMULA'
-            },
-            'composed_constraints': {
-                'condition': 'FORMULA'
-            },
-            'filters': {
-                'config': 'JSON'
-            },
+            'parameters': {'parameter_id': 'PARAM', 'request_path': 'ARRAY_PATH'},
+            'datasets': {'dataset_id': 'DS', 'entity_type': 'ENT', 'config': 'JSON'},
+            'tables': {'table_id': 'TBL', 'physical_name': 'DB.TBL'},
+            'table_fields': {'table_id': 'TBL', 'entity_type': 'ENT', 'property_id': 'P', 'field_name': 'COL'},
+            'vertices': {'config': 'JSON', 'constraints': 'JSON'},
+            'edges': {'condition': 'FORMULA', 'config': 'JSON'}, # FIX Condition
+            'vertex_functions': {'entity_type': 'ENT', 'property_id': 'P', 'calculation_func': 'FORMULA', 'aggregation_func': 'FORMULA'},
+            'constraints': {'entity_type': 'ENT', 'property_id': 'P', 'config': 'JSON', 'condition': 'FORMULA'}, # FIX Condition
+            'composed_constraints': {'condition': 'FORMULA'}, # FIX Condition
+            'filters': {'config': 'JSON'},
             'aggregation': {'aggregation_id': 'AGG'},
-            'limitation': {'limitation_id': 'LIM'},
+            'limitation': {'limitation_id': 'LIM', 'total_limit': 'FORMULA'}, # FIX total_limit
             'ordering': {'ordering_id': 'ORD'},
             'group_by': {'entity_type': 'ENT', 'property_id': 'P'},
             'order_by': {'entity_type': 'ENT', 'property_id': 'P'}
@@ -408,11 +407,31 @@ class OutputGenerator:
             if pk in self.loader.db.get('tenants', {}):
                 self.context['tenants'].add(pk)
 
+    def _prefill_known_parameters(self):
+        """Собираем все известные параметры из контекста и передаем в маскер."""
+        if not self.masker: return
+        
+        param_ids = set()
+        # 1. Из таблицы parameters
+        for pk in self.context.get('parameters', set()):
+            # pk = (ns, tenant, param_id)
+            param_ids.add(pk[2])
+            
+        # 2. Регистрируем их в маскере как "известные" для парсинга Java-условий
+        self.masker.set_known_parameters(param_ids)
+        
+        # 3. Сразу регистрируем их, чтобы получить маски (PARAM_1 и т.д.)
+        for pid in param_ids:
+            self.masker.register(pid, 'PARAM')
+
     def generate_sql(self) -> str:
         lines = []
         lines.append("SET SEARCH_PATH to qe_config;\n")
         
         self._ensure_tenants_exist()
+
+        # ВАЖНО: Сначала регистрируем параметры, чтобы маскер знал о них при обработке формул
+        self._prefill_known_parameters()
         
         # Порядок вставки важен для целостности ссылок
         order = [
