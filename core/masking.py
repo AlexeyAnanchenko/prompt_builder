@@ -177,25 +177,8 @@ class ContextMasker:
             p_val = match.group(1)
             return f"{{{self.register(p_val, 'PARAM')}}}"
         text = self.re_param_braces.sub(replace_param_braces, text)
-        
-        # 4. Java-style параметры (слова без кавычек, совпадающие с known_parameters)
-        # Делаем это ДО обработки свойств через точку, чтобы structRoots != null сработало
-        def replace_java_var(match):
-            word = match.group(1)
-            if word in self.known_parameters:
-                return self.register(word, 'PARAM')
-            # Также ловим обращения к словарям без dictGet, если они похожи на schema.table
-            if '.' in word and not word.startswith('ENT_') and not word.startswith('TBL_'):
-                 # Простая эвристика: если есть точка и это не замаскированная сущность
-                 # Можно попробовать замаскировать как DB.DICT или DB.TBL?
-                 # Но это опасно для методов Java (var.equals).
-                 # Оставим пока только параметры.
-                 pass
-            return word
-        
-        text = self.re_word.sub(replace_java_var, text)
 
-        # 5. Entity.Property
+        # 4. Entity.Property
         def replace_prop(match):
             left = match.group(1)
             right = match.group(2)
@@ -219,6 +202,23 @@ class ContextMasker:
 
             return match.group(0)
         text = self.re_dot_prop.sub(replace_prop, text)
+        
+        # 5. Java-style параметры (слова без кавычек, совпадающие с known_parameters)
+        # Делаем это ДО обработки свойств через точку, чтобы structRoots != null сработало
+        def replace_java_var(match):
+            word = match.group(1)
+            if word in self.known_parameters:
+                return self.register(word, 'PARAM')
+            # Также ловим обращения к словарям без dictGet, если они похожи на schema.table
+            if '.' in word and not word.startswith('ENT_') and not word.startswith('TBL_'):
+                 # Простая эвристика: если есть точка и это не замаскированная сущность
+                 # Можно попробовать замаскировать как DB.DICT или DB.TBL?
+                 # Но это опасно для методов Java (var.equals).
+                 # Оставим пока только параметры.
+                 pass
+            return word
+        
+        text = self.re_word.sub(replace_java_var, text)
 
         # 6. Литералы 'string' -> OBJ (С ИСПРАВЛЕНИЕМ)
         def replace_lit(match):
