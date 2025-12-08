@@ -225,7 +225,17 @@ class ContextResolver:
     def _find_and_add_obj(self, table, obj_id):
         for pk in self.loader.db[table]:
             if str(pk[-1]) == str(obj_id): 
-                self.context[table].add(pk)
+                # Проверяем, был ли этот объект уже добавлен, чтобы избежать лишней работы
+                if pk not in self.context[table]:
+                    self.context[table].add(pk)
+                    
+                    # --- ЛОГИКА СКАНИРОВАНИЯ ЗАВИСИМОСТЕЙ ---
+                    row = self.loader.db[table][pk]
+                    
+                    # Если добавляем limitation, нужно просканировать формулы внутри него
+                    if table == 'limitation':
+                        self._scan_formula(row.get('total_limit'))
+                        self._scan_formula(row.get('group_limit')) # На всякий случай проверяем и group_limit
 
     def _scan_formula(self, formula: Optional[str]):
         if not formula: return

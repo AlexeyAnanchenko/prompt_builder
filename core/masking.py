@@ -54,10 +54,30 @@ class ContextMasker:
         """Загружает список известных ID параметров, чтобы детектировать их в Java-условиях."""
         self.known_parameters = params
 
+    def _is_generated_mask(self, val: str) -> bool:
+        """
+        Проверяет, является ли строка уже сгенерированной маской.
+        Ловит форматы: ENT_1, PARAM_2, DB.DICT_1, DB.TBL_5 и т.д.
+        """
+        if not val:
+            return False
+            
+        # Паттерн покрывает:
+        # 1. Простые маски: ENT_1, P_2, TBL_3
+        # 2. Составные маски БД: DB.DICT_1, DB.TBL_2
+        # ^ - начало строки, $ - конец, \d+ - цифры
+        return bool(re.match(r'^(DB\.[A-Z]+|[A-Z]+)_\d+$', val))
+
     def register(self, value: Any, category: str) -> str:
         if value is None: return "null"
         val_str = str(value)
         if not val_str: return val_str
+
+        # --- ИСПРАВЛЕНИЕ: Защита от двойного маскирования ---
+        # Если значение уже похоже на нашу маску (например, DB.DICT_1),
+        # мы возвращаем его как есть, не регистрируя новую маску.
+        if self._is_generated_mask(val_str):
+            return val_str
             
         key = (category, val_str)
         if key in self.map_forward:
