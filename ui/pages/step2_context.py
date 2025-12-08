@@ -149,11 +149,14 @@ def _render_result_tabs_section():
             st.code(masked_text, language="sql", line_numbers=True)
             render_button_pair("clear_masked", "copy_masked", masked_text)
         
-        if masker and masker.map_forward:
+    if masker and masker.map_forward:
              with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
+                # Сортируем для удобства
+                sorted_items = sorted(masker.map_forward.items(), key=lambda item: item[1])
+                
                 st.table([
-                    {"Real Name": k, "Mask": v} 
-                    for k, v in masker.map_forward.items()
+                    {"Category": k[0], "Real Name": k[1], "Mask": v} 
+                    for k, v in sorted_items
                 ])
 
     # --- TAB 2: ORIGINAL ---
