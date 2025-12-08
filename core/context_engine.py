@@ -375,27 +375,27 @@ class OutputGenerator:
         #   - 'ARRAY_PATH': обработка массива путей
         self.field_mapping = {
             'tenants': {'tenant_id': 'TEN', 'tenant_name': 'TEN_NAME'},
-            'entities': {'entity_type': 'ENT', 'entity_name': 'ENT_NAME'},
-            'composed_entities': {'composed_entity': 'ENT', 'entity_type': 'ENT'},
+            'entities': {'tenant_id': 'TEN', 'entity_type': 'ENT', 'entity_name': 'ENT_NAME'},
+            'composed_entities': {'tenant_id': 'TEN', 'composed_entity': 'ENT', 'entity_type': 'ENT'},
             'entity_properties': {
-                'entity_type': 'ENT', 'property_id': 'P',
+                'tenant_id': 'TEN', 'entity_type': 'ENT', 'property_id': 'P',
                 'calculation_func': 'FORMULA', 'aggregation_func': 'FORMULA', 'conversion_func': 'FORMULA'
             },
-            'parameters': {'parameter_id': 'PARAM', 'request_path': 'ARRAY_PATH'},
-            'datasets': {'dataset_id': 'DS', 'entity_type': 'ENT', 'config': 'JSON'},
-            'tables': {'table_id': 'TBL', 'physical_name': 'DB.TBL'},
-            'table_fields': {'table_id': 'TBL', 'entity_type': 'ENT', 'property_id': 'P', 'field_name': 'COL'},
-            'vertices': {'config': 'JSON', 'constraints': 'JSON'},
-            'edges': {'condition': 'FORMULA', 'config': 'JSON'}, # FIX Condition
-            'vertex_functions': {'entity_type': 'ENT', 'property_id': 'P', 'calculation_func': 'FORMULA', 'aggregation_func': 'FORMULA'},
-            'constraints': {'entity_type': 'ENT', 'property_id': 'P', 'config': 'JSON', 'condition': 'FORMULA'}, # FIX Condition
-            'composed_constraints': {'condition': 'FORMULA'}, # FIX Condition
-            'filters': {'config': 'JSON'},
-            'aggregation': {'aggregation_id': 'AGG'},
-            'limitation': {'limitation_id': 'LIM', 'total_limit': 'FORMULA'}, # FIX total_limit
-            'ordering': {'ordering_id': 'ORD'},
-            'group_by': {'entity_type': 'ENT', 'property_id': 'P'},
-            'order_by': {'entity_type': 'ENT', 'property_id': 'P'}
+            'parameters': {'tenant_id': 'TEN', 'parameter_id': 'PARAM', 'request_path': 'ARRAY_PATH'},
+            'datasets': {'tenant_id': 'TEN', 'dataset_id': 'DS', 'entity_type': 'ENT', 'config': 'JSON'},
+            'tables': {'tenant_id': 'TEN', 'table_id': 'TBL', 'physical_name': 'DB.TBL'},
+            'table_fields': {'tenant_id': 'TEN', 'table_id': 'TBL', 'entity_type': 'ENT', 'property_id': 'P', 'field_name': 'COL'},
+            'vertices': {'tenant_id': 'TEN', 'config': 'JSON', 'constraints': 'JSON'},
+            'edges': {'tenant_id': 'TEN', 'condition': 'FORMULA', 'config': 'JSON'},
+            'vertex_functions': {'tenant_id': 'TEN', 'entity_type': 'ENT', 'property_id': 'P', 'calculation_func': 'FORMULA', 'aggregation_func': 'FORMULA'},
+            'constraints': {'tenant_id': 'TEN', 'entity_type': 'ENT', 'property_id': 'P', 'config': 'JSON', 'condition': 'FORMULA'},
+            'composed_constraints': {'tenant_id': 'TEN', 'condition': 'FORMULA'},
+            'filters': {'tenant_id': 'TEN', 'config': 'JSON'},
+            'aggregation': {'tenant_id': 'TEN', 'aggregation_id': 'AGG'},
+            'limitation': {'tenant_id': 'TEN', 'limitation_id': 'LIM', 'total_limit': 'FORMULA'},
+            'ordering': {'tenant_id': 'TEN', 'ordering_id': 'ORD'},
+            'group_by': {'tenant_id': 'TEN', 'entity_type': 'ENT', 'property_id': 'P'},
+            'order_by': {'tenant_id': 'TEN', 'entity_type': 'ENT', 'property_id': 'P'}
         }
 
     def _ensure_tenants_exist(self):
