@@ -21,9 +21,9 @@ class ContextMasker:
             'sum', 'min', 'max', 'avg', 'count', 'any', 'anyLast', 'argMin', 'argMax',
             'topK', 'quantiles', 'quantilesExact', 'median',
             # Типы данных (иногда бывают в строках)
-            'String', 'Int64', 'UInt64', 'Float64', 'Date', 'DateTime',
+            'String', 'Int64', 'UInt64', 'Float64', 'Date', 'DateTime'
             # Специальные значения (уже были в логике, но добавим явно)
-            'none', 'null', 'true', 'false', '', 
+            'none', 'null', 'true', 'false', '', '%d.%m', 'MONTH', 'DAY', 'YEAR',
             # Форматирование
             'JSON', 'CSV', 'TSV'
         }
@@ -34,14 +34,15 @@ class ContextMasker:
         self.re_dict_tuple = re.compile(r"dictGet\s*\(\s*'([^']+)'\s*,\s*tuple\s*\((.*?)\)", re.DOTALL)
         # 2. dictGet одиночный
         self.re_dict_single = re.compile(r"dictGet\s*\(\s*'([^']+)'\s*,\s*'([^']+)'", re.DOTALL)
-        # 3. Параметры в фигурных скобках {param}
-        self.re_param_braces = re.compile(r'\{([a-zA-Z0-9_]+)\}')
-        # 4. Свойства через точку: Entity.Property
+        # 3. tupleElement (tuple, 'columnName')
+        self.re_tuple_element = re.compile(r"(?i)tupleElement\s*\(\s*([a-zA-Z0-9_\.]+)\s*,\s*'((?:''|[^'])*)'\s*\)", re.DOTALL)
+        # 4. Параметры в фигурных скобках {param}
+        self.re_param_braces = re.compile(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}')
+        # 5. Свойства через точку: Entity.Property
         self.re_dot_prop = re.compile(r"\b([a-zA-Z][a-zA-Z0-9_]*)\.([a-zA-Z0-9_]+)\b")
-        # 5. Литералы в кавычках 'value' (с учетом экранирования '')
-        # Группа 1 захватывает содержимое.
+        # 6. Литералы в кавычках 'value' (с учетом экранирования '')
         self.re_literal = re.compile(r"'((?:''|[^'])*)'")
-        # 6. Отдельные слова (для Java-style условий: structRoots != null)
+        # 7. Отдельные слова (для Java-style условий: structRoots != null)
         self.re_word = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\b")
 
     def clear(self):
@@ -171,14 +172,28 @@ class ContextMasker:
             mask_c = self.register(c_name, 'COL')
             return f"dictGet('{mask_d}', '{mask_c}'"
         text = self.re_dict_single.sub(replace_single_dict, text)
+
+        # 3. tupleElement (tuple, 'columnName')
+        def replace_tuple_elem(match):
+            prefix = match.group(1)   # Первый аргумент (например, ENT_10.P_328 или person.data)
+            col_name = match.group(2) # Имя поля (например, 'real_col_name')
+            
+            # Регистрируем имя поля как COL
+            mask_c = self.register(col_name, 'COL')
+            
+            # Возвращаем конструкцию обратно.
+            # prefix оставляем как есть, он обработается следующими регулярками (re_dot_prop)
+            return f"tupleElement({prefix}, '{mask_c}')"
+
+        text = self.re_tuple_element.sub(replace_tuple_elem, text)
         
-        # 3. Параметры в фигурных скобках {param}
+        # 4. Параметры в фигурных скобках {param}
         def replace_param_braces(match):
             p_val = match.group(1)
             return f"{{{self.register(p_val, 'PARAM')}}}"
         text = self.re_param_braces.sub(replace_param_braces, text)
 
-        # 4. Entity.Property
+        # 5. Entity.Property
         def replace_prop(match):
             left = match.group(1)
             right = match.group(2)
@@ -203,7 +218,7 @@ class ContextMasker:
             return match.group(0)
         text = self.re_dot_prop.sub(replace_prop, text)
         
-        # 5. Java-style параметры (слова без кавычек, совпадающие с known_parameters)
+        # 6. Java-style параметры (слова без кавычек, совпадающие с known_parameters)
         # Делаем это ДО обработки свойств через точку, чтобы structRoots != null сработало
         def replace_java_var(match):
             word = match.group(1)
@@ -220,7 +235,7 @@ class ContextMasker:
         
         text = self.re_word.sub(replace_java_var, text)
 
-        # 6. Литералы 'string' -> OBJ (С ИСПРАВЛЕНИЕМ)
+        # 7. Литералы 'string' -> OBJ (С ИСПРАВЛЕНИЕМ)
         def replace_lit(match):
             val = match.group(1)
             
