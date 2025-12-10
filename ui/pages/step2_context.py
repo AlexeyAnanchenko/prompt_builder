@@ -151,8 +151,20 @@ def _render_result_tabs_section():
         
     if masker and masker.map_forward:
              with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
+
                 # Сортируем для удобства
-                sorted_items = sorted(masker.map_forward.items(), key=lambda item: item[1])
+                def natural_sort_key(item):
+                    """Превращает 'COL_10' в ('COL', 10) для правильной сортировки"""
+                    mask_val = item[1]
+                    try:
+                        # Разбиваем по последнему подчеркиванию
+                        prefix, num = mask_val.rsplit('_', 1)
+                        return (prefix, int(num))
+                    except ValueError:
+                        # Если формат другой, просто возвращаем строку
+                        return (mask_val, 0)
+
+                sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
                 
                 st.table([
                     {"Category": k[0], "Real Name": k[1], "Mask": v} 
