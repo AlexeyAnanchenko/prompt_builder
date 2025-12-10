@@ -122,13 +122,14 @@ class ContextMasker:
         return data
 
     def _infer_json_category(self, key: str) -> Optional[str]:
+        # Словарь маппинга ключей JSON на категории масок
         mapping = {
             'entity': 'ENT', 'entity_type': 'ENT',
             'property': 'P', 'property_id': 'P', 
             'parameter': 'PARAM',
             'dataset': 'DS',
             'ordering': 'ORD', 'limitation': 'LIM', 'aggregation': 'AGG',
-            'table': 'TBL', 'physical_name': 'DB.TBL'
+            'table': 'TBL', 'physical_name': 'DB.TBL',
         }
         return mapping.get(key)
     
@@ -153,12 +154,10 @@ class ContextMasker:
             # Внутри кортежа заменяем литералы на COL
             def replace_col_item(m):
                 col_val = m.group(1)
-                # Если это не пустая строка
                 if col_val:
                     return f"'{self.register(col_val, 'COL')}'"
                 return "''"
             
-            # Применяем замену только к строкам внутри tuple(...)
             masked_content = self.re_literal.sub(replace_col_item, tuple_content)
             return f"dictGet('{mask_d}', tuple({masked_content})"
         
@@ -175,14 +174,9 @@ class ContextMasker:
 
         # 3. tupleElement (tuple, 'columnName')
         def replace_tuple_elem(match):
-            prefix = match.group(1)   # Первый аргумент (например, ENT_10.P_328 или person.data)
-            col_name = match.group(2) # Имя поля (например, 'real_col_name')
-            
-            # Регистрируем имя поля как COL
+            prefix = match.group(1)
+            col_name = match.group(2)
             mask_c = self.register(col_name, 'COL')
-            
-            # Возвращаем конструкцию обратно.
-            # prefix оставляем как есть, он обработается следующими регулярками (re_dot_prop)
             return f"tupleElement({prefix}, '{mask_c}')"
 
         text = self.re_tuple_element.sub(replace_tuple_elem, text)
@@ -198,7 +192,6 @@ class ContextMasker:
             left = match.group(1)
             right = match.group(2)
             
-            # Если левая часть - известная сущность (или уже маска ENT/TBL)
             is_entity = (('ENT', left) in self.map_forward) or (('TBL', left) in self.map_forward) or left.startswith('ENT_') or left.startswith('TBL_')
             
             if is_entity:
@@ -207,58 +200,48 @@ class ContextMasker:
                 mask_r = self.register(right, 'P')
                 return f"{mask_l}.{mask_r}"
             
-            # Попытка поймать словари вне dictGet: organization.dict
-            if not is_entity and left not in ['date_diff', 'equals', 'dictGet', 'tuple', 'arrayMap', 'toString']:
-                 # Если левая часть похожа на схему БД (не содержит больших букв CamelCase, обычно snake_case)?
-                 # Сложно. Давайте доверимся пользователю: если он хочет маскировать DB.DICT, пусть это будет через явные списки или dictGet.
-                 # Но в пункте 3 вы просили organization.unit_hierarhy_dict -> OBJ_5 (или DB.DICT).
-                 # Давайте проверим, не является ли это 'schema.table' в литерале (см. пункт 6).
-                 pass
-
             return match.group(0)
         text = self.re_dot_prop.sub(replace_prop, text)
         
-        # 6. Java-style параметры (слова без кавычек, совпадающие с known_parameters)
-        # Делаем это ДО обработки свойств через точку, чтобы structRoots != null сработало
+        # 6. Java-style параметры
         def replace_java_var(match):
             word = match.group(1)
             if word in self.known_parameters:
                 return self.register(word, 'PARAM')
-            # Также ловим обращения к словарям без dictGet, если они похожи на schema.table
-            if '.' in word and not word.startswith('ENT_') and not word.startswith('TBL_'):
-                 # Простая эвристика: если есть точка и это не замаскированная сущность
-                 # Можно попробовать замаскировать как DB.DICT или DB.TBL?
-                 # Но это опасно для методов Java (var.equals).
-                 # Оставим пока только параметры.
-                 pass
             return word
         
         text = self.re_word.sub(replace_java_var, text)
 
-        # 7. Литералы 'string' -> OBJ (С ИСПРАВЛЕНИЕМ)
+        # 7. Литералы 'string' -> БОЛЬШЕ НЕ OBJ (ИЗМЕНЕНО)
         def replace_lit(match):
             val = match.group(1)
             
-            # А. Проверка на зарезервированные слова (функции ClickHouse и т.д.)
+            # Если это зарезервированное слово или артефакт синтаксиса - возвращаем как есть
             if val in self.reserved_literals:
                 return f"'{val}'"
 
-            # Б. Артефакты кода
             if ')' in val or '(' in val or (',' in val and ' ' not in val):
                  return f"'{val}'"
 
-            # В. Попытка определить DB.DICT по синтаксису "schema.name"
+            # Оставляем маскировку словарей (DB.DICT), если это похоже на схему (schema.name)
+            # Если хотите убрать и это - закомментируйте следующие две строки
             if '.' in val and '_' in val and ' ' not in val:
                  return f"'{self.register(val, 'DB.DICT')}'"
 
-            # Г. Фильтр мусора
-            if not self._is_meaningful_string(val):
-                return f"'{val}'"
-                
-            if val in self.map_reverse: return f"'{val}'"
-            
-            mask = self.register(val, 'OBJ')
-            return f"'{mask}'"
+            # Если значение УЖЕ есть в словаре (например, имя сущности попало в кавычки) - используем маску
+            # Это полезно для целостности (чтобы 'person' стало 'ENT_1', если person уже ENT_1)
+            if val in self.map_forward: # Проверка по ключу требует кортежа, тут упрощенно ищем value
+                 # Но у нас ключи (cat, val). Сложно найти быстро без категории.
+                 # Поэтому проверим обратный маппинг на случай повторного прохода (не нужно)
+                 pass
+
+            # Ищем, не зарегистрировано ли это слово уже под какой-то категорией
+            # Это опционально, но полезно.
+            for (cat, real_val), mask in self.map_forward.items():
+                if real_val == val:
+                    return f"'{mask}'"
+
+            return f"'{val}'"
 
         text = self.re_literal.sub(replace_lit, text)
         
