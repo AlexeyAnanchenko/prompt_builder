@@ -31,7 +31,6 @@ TEXTAREA_HEIGHTS: Dict[str, int] = {
 
 # Сообщения
 MESSAGES: Dict[str, str] = {
-    "error_no_query": "⛔ Пожалуйста, введите запрос",
     "error_no_mapping": "⚠️ Нет словаря для расшифровки. Сначала сгенерируйте замаскированный промпт.",
     "error_no_llm_response": "⚠️ Введите ответ LLM",
     "success_version_saved": "✅ Версия '{}' сохранена!",

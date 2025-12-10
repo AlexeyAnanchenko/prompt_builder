@@ -134,18 +134,18 @@ def _render_context_selection_section():
 
 def _render_user_query_section():
     # Создаем строку с заголовком и кнопками
-    col_title, col_btns = st.columns([1, 1])
+    col_title, col_btns = st.columns([2, 1])
     
     with col_title:
         st.subheader("💬 Мой запрос")
         
     with col_btns:
         # Выравниваем кнопки вправо
-        sub_c1, sub_c2, sub_c3 = st.columns([2, 1, 1]) 
-        with sub_c2:
+        sub_c1, sub_c2 = st.columns([1, 1])
+        with sub_c1:
             if st.button("🗑️", key="clear_query_btn", help="Очистить запрос", on_click=_clear_user_query, use_container_width=True):
                 pass
-        with sub_c3:
+        with sub_c2:
             # Для копирования берем текст из state
             text_to_copy = st.session_state.get('user_query', '')
             if st.button("📋", key="copy_query_btn", help="Копировать запрос", disabled=not text_to_copy, use_container_width=True):
@@ -235,10 +235,7 @@ def _render_result_tabs_section():
 
 
 def _handle_generate_combined():
-    if not st.session_state.get('user_query'):
-        st.error(MESSAGES["error_no_query"])
-        return
-        
+
     ns_id = st.session_state.selected_namespace.split(' ')[0]
     masker = st.session_state["masker"]
     
