@@ -1,7 +1,6 @@
 import streamlit as st
 from ui.components import (
     render_step_toggle_button,
-    render_button_pair,
     render_token_counter
 )
 from core.prompt_generator import PromptGenerator
@@ -11,8 +10,14 @@ from services.database import DatabaseManager
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS, MAX_TOKENS
 from utils.logger import setup_logger
 from utils.tokenizer import TokenCounter
+from utils.helpers import copy_to_clipboard
 
 logger = setup_logger(__name__)
+
+# --- КОЛБЭКИ ---
+def _clear_user_query():
+    """Очищает поле ввода запроса"""
+    st.session_state.user_query = ""
 
 def render_step2() -> None:
     """Рендерит шаг 2: Генерация промпта с маскированием"""
@@ -21,8 +26,10 @@ def render_step2() -> None:
     if "masker" not in st.session_state:
         st.session_state["masker"] = ContextMasker()
 
+    # CSS для кнопок
     st.markdown("""
         <style>
+        /* Стиль зеленой кнопки генерации */
         div[data-testid="stButton"] > button[key="btn_generate_final_prompt"] {
             background-color: #28a745 !important;
             color: white !important;
@@ -33,9 +40,10 @@ def render_step2() -> None:
             border-color: #1e7e34 !important;
             color: white !important;
         }
-        div[data-testid="stButton"] > button[key="btn_generate_final_prompt"]:active {
-            background-color: #1e7e34 !important;
-            color: white !important;
+        
+        /* Выравнивание кнопок в заголовке запроса */
+        .query-toolbar-btn {
+            margin-top: -5px;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -59,7 +67,20 @@ def render_step2() -> None:
     
     st.markdown("---")
 
-    col_left, col_right = st.columns(2)
+    # --- НАСТРОЙКА ИНТЕРФЕЙСА (СЛАЙДЕР) ---
+    # Позволяет пользователю менять ширину колонок
+    with st.expander("⚙️ Настройки отображения (ширина колонок)", expanded=False):
+        col_ratio = st.slider(
+            "Ширина левой части (Запрос) %", 
+            min_value=20, 
+            max_value=80, 
+            value=30, 
+            step=5,
+            help="Подвиньте, чтобы увеличить место для промпта (справа) или для ввода (слева)."
+        )
+    
+    # Разделяем экран в пропорции, заданной слайдером
+    col_left, col_right = st.columns([col_ratio, 100 - col_ratio])
     
     with col_left:
         _render_user_query_section()
@@ -112,7 +133,25 @@ def _render_context_selection_section():
 
 
 def _render_user_query_section():
-    st.subheader("💬 Мой запрос")
+    # Создаем строку с заголовком и кнопками
+    col_title, col_btns = st.columns([1, 1])
+    
+    with col_title:
+        st.subheader("💬 Мой запрос")
+        
+    with col_btns:
+        # Выравниваем кнопки вправо
+        sub_c1, sub_c2, sub_c3 = st.columns([2, 1, 1]) 
+        with sub_c2:
+            if st.button("🗑️", key="clear_query_btn", help="Очистить запрос", on_click=_clear_user_query, use_container_width=True):
+                pass
+        with sub_c3:
+            # Для копирования берем текст из state
+            text_to_copy = st.session_state.get('user_query', '')
+            if st.button("📋", key="copy_query_btn", help="Копировать запрос", disabled=not text_to_copy, use_container_width=True):
+                copy_to_clipboard(text_to_copy, "copy_query_btn")
+                st.toast("Запрос скопирован!")
+
     st.text_area(
         "Введите ваш запрос", 
         height=TEXTAREA_HEIGHTS["user_query"], 
@@ -136,40 +175,51 @@ def _render_result_tabs_section():
     masker = st.session_state.get("masker")
     token_count = st.session_state.get('token_count', 0)
     
+    # Высота прокручиваемой области в пикселях
+    SCROLL_HEIGHT = 500
+    
     # --- TAB 1: MASKED ---
     with tab_masked:
         masked_text = st.session_state.final_prompt_masked
         
-        # Просто рендерим каунтер без лишних слов
         render_token_counter(token_count, MAX_TOKENS)
-        
         st.caption("Этот текст безопасен для отправки в публичную LLM.")
 
-        with st.expander("📄 Показать текст промпта и кнопки", expanded=False):
-            st.code(masked_text, language="sql", line_numbers=True)
-            render_button_pair("clear_masked", "copy_masked", masked_text)
+        with st.expander("📄 Показать текст промпта", expanded=True):
+            # Контейнер с фиксированной высотой = скролл всегда активен, если контент больше
+            with st.container(height=SCROLL_HEIGHT):
+                st.code(masked_text, language="sql", line_numbers=True)
         
     if masker and masker.map_forward:
              with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
-
-                # Сортируем для удобства
+                
                 def natural_sort_key(item):
-                    """Превращает 'COL_10' в ('COL', 10) для правильной сортировки"""
                     mask_val = item[1]
                     try:
-                        # Разбиваем по последнему подчеркиванию
                         prefix, num = mask_val.rsplit('_', 1)
                         return (prefix, int(num))
                     except ValueError:
-                        # Если формат другой, просто возвращаем строку
                         return (mask_val, 0)
 
                 sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
                 
-                st.table([
+                df_data = [
                     {"Category": k[0], "Real Name": k[1], "Mask": v} 
                     for k, v in sorted_items
-                ])
+                ]
+                
+                # ИСПРАВЛЕНИЕ: use_container_width=True -> width="stretch"
+                st.dataframe(
+                    df_data, 
+                    height=400, 
+                    width="stretch", # Исправлено согласно ошибке
+                    hide_index=True,
+                    column_config={
+                        "Category": st.column_config.TextColumn("Категория", width="small"),
+                        "Real Name": st.column_config.TextColumn("Реальное имя"),
+                        "Mask": st.column_config.TextColumn("Маска", width="small"),
+                    }
+                )
 
     # --- TAB 2: ORIGINAL ---
     with tab_original:
@@ -178,9 +228,10 @@ def _render_result_tabs_section():
         render_token_counter(token_count, MAX_TOKENS)
         st.caption("Внимание! Содержит реальные названия полей и конфигураций.")
         
-        with st.expander("📄 Показать оригинальный промпт", expanded=False):
-            st.code(orig_text, language="sql", line_numbers=True)
-            render_button_pair("clear_orig", "copy_orig", orig_text)
+        with st.expander("📄 Показать оригинальный промпт", expanded=True):
+            # Контейнер с фиксированной высотой
+            with st.container(height=SCROLL_HEIGHT):
+                st.code(orig_text, language="sql", line_numbers=True)
 
 
 def _handle_generate_combined():
@@ -191,7 +242,6 @@ def _handle_generate_combined():
     ns_id = st.session_state.selected_namespace.split(' ')[0]
     masker = st.session_state["masker"]
     
-    # 1. Очищаем маскер перед генерацией
     masker.clear()
     
     if "loader" not in st.session_state:
@@ -206,24 +256,20 @@ def _handle_generate_combined():
     user_query_orig = st.session_state.get('user_query', '')
     
     with st.spinner("Анализ графа, генерация SQL и маскирование..."):
-        # A. Строим контекст
         resolver = ContextResolver(loader)
         if datasets or entities:
             for ds in datasets: resolver.resolve_by_dataset(ds)
             for ent in entities: resolver.resolve_by_entity(ent)
         
-        # B. Генерируем SQL
         gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
         sql_masked = gen_masked.generate_sql()
         
         gen_orig = OutputGenerator(loader, resolver.context, masker=None)
         sql_original = gen_orig.generate_sql()
         
-        # C. Маскируем текстовые части
         system_prompt_masked = masker.mask_text(system_prompt_orig)
         user_query_masked = masker.mask_text(user_query_orig)
         
-        # D. Собираем финальные промпты
         generator = PromptGenerator()
         
         final_prompt_masked = generator.generate(
@@ -244,9 +290,7 @@ def _handle_generate_combined():
         st.session_state.final_prompt_original = final_prompt_original
         st.session_state.generated_sql_context = sql_original
         
-        # --- ПОДСЧЕТ ТОКЕНОВ ---
         try:
-            # Используем count_tokens, который возвращает int
             token_count = TokenCounter.count_tokens(final_prompt_masked)
             st.session_state.token_count = token_count
             logger.info(f"Токенов в промпте: {token_count}")
