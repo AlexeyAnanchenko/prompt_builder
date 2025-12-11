@@ -23,6 +23,11 @@ def render_animated_header() -> None:
         padding: 0;
         user-select: none;
         font-family: "Source Sans Pro", sans-serif;
+        
+        /* === ИСПРАВЛЕНИЕ ЦЕНТРИРОВАНИЯ === */
+        /* Сдвигаем контейнер влево на 50px */
+        /* Регулируйте это число (-50px), если нужно сдвинуть сильнее или слабее */
+        transform: translateX(-50px); 
     }
     
     .hammer-emoji {

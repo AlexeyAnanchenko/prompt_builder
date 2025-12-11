@@ -34,28 +34,6 @@ def render_step2() -> None:
     if "masker" not in st.session_state:
         st.session_state["masker"] = ContextMasker()
 
-    # CSS для кнопок
-    st.markdown("""
-        <style>
-        /* Стиль зеленой кнопки генерации */
-        div[data-testid="stButton"] > button[key="btn_generate_final_prompt"] {
-            background-color: #28a745 !important;
-            color: white !important;
-            border-color: #28a745 !important;
-        }
-        div[data-testid="stButton"] > button[key="btn_generate_final_prompt"]:hover {
-            background-color: #218838 !important;
-            border-color: #1e7e34 !important;
-            color: white !important;
-        }
-        
-        /* Выравнивание кнопок в заголовке запроса */
-        .query-toolbar-btn {
-            margin-top: -5px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     render_step_toggle_button(
         step_number=2,
         title="Сбор контекста и Генерация",
@@ -75,20 +53,10 @@ def render_step2() -> None:
     
     st.markdown("---")
 
-    # --- НАСТРОЙКА ИНТЕРФЕЙСА (СЛАЙДЕР) ---
-    # Позволяет пользователю менять ширину колонок
-    with st.expander("⚙️ Настройки отображения (ширина колонок)", expanded=False):
-        col_ratio = st.slider(
-            "Ширина левой части (Запрос) %", 
-            min_value=20, 
-            max_value=80, 
-            value=30, 
-            step=5,
-            help="Подвиньте, чтобы увеличить место для промпта (справа) или для ввода (слева)."
-        )
-    
-    # Разделяем экран в пропорции, заданной слайдером
-    col_left, col_right = st.columns([col_ratio, 100 - col_ratio])
+    # --- ОСНОВНАЯ РАЗМЕТКА ---
+    # Здесь вы можете вручную менять ширину колонок.
+    # Сейчас стоит 30% для левой части (ввод) и 70% для правой (результат).
+    col_left, col_right = st.columns([30, 70])
     
     with col_left:
         _render_user_query_section()
