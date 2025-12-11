@@ -103,6 +103,29 @@ class ContextMasker:
             masked_text = re.sub(pattern, mask, masked_text)
         return masked_text
 
+    def unmask_text(self, text: str) -> str:
+        """
+        НОВЫЙ МЕТОД: Расшифровывает замаскированный текст обратно в оригинальный.
+        Использует map_reverse для замены масок на реальные значения.
+        """
+        if not text:
+            return ""
+        
+        if not self.map_reverse:
+            return text
+        
+        # Сортируем маски от длинных к коротким (чтобы избежать частичных замен)
+        # Например, DB.DICT_10 должна быть обработана раньше, чем P_1
+        sorted_masks = sorted(self.map_reverse.items(), key=lambda x: len(x[0]), reverse=True)
+        
+        unmasked_text = text
+        for mask, original_value in sorted_masks:
+            # Используем границы слов для точной замены
+            pattern = r'\b' + re.escape(mask) + r'\b'
+            unmasked_text = re.sub(pattern, original_value, unmasked_text)
+        
+        return unmasked_text
+
     def mask_json(self, data: Any) -> Any:
         if isinstance(data, dict):
             new_dict = {}

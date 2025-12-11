@@ -32,7 +32,6 @@ def render_step3() -> None:
 
     # ==========================================
     # CALLBACKS (Функции обратного вызова)
-    # Они выполняются ДО рендера интерфейса
     # ==========================================
     
     def on_encrypt_click():
@@ -41,7 +40,7 @@ def render_step3() -> None:
         if text and masker:
             masked = masker.mask_text(text)
             st.session_state.chat_llm = masked
-            # st.rerun() не нужен, callback сам вызывает перезагрузку
+            logger.info(f"Зашифровано {len(text)} символов")
 
     def on_decrypt_click():
         """Callback: Расшифровывает LLM -> Human"""
@@ -49,6 +48,7 @@ def render_step3() -> None:
         if text and masker:
             unmasked = masker.unmask_text(text)
             st.session_state.chat_human = unmasked
+            logger.info(f"Расшифровано {len(text)} символов")
 
     def on_clear_human():
         st.session_state.chat_human = ""
@@ -86,7 +86,6 @@ def render_step3() -> None:
     with col_actions:
         st.markdown("<div style='height: 150px;'></div>", unsafe_allow_html=True)
         
-        # ВАЖНО: Используем on_click вместо if st.button
         st.button(
             "➡️\nEncrypt", 
             key="btn_encrypt", 

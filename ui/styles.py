@@ -36,15 +36,16 @@ def inject_custom_styles() -> None:
         font-size: 1.1em !important;
         font-weight: 600 !important;
         box-shadow: 0 3px 12px rgba(90, 127, 184, 0.2) !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.2s ease !important;
         margin: 20px 0 15px 0 !important;
         letter-spacing: 0.3px;
     }
     
+    /* ИСПРАВЛЕНО: Более спокойный hover для кнопок этапов */
     button[kind="primary"]:hover {
         background: linear-gradient(135deg, #4a6fa0 0%, #5a7fb8 100%) !important;
-        box-shadow: 0 5px 16px rgba(90, 127, 184, 0.3) !important;
-        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 4px 14px rgba(90, 127, 184, 0.25) !important;
+        transform: translateY(-1px) scale(1.005) !important;
     }
     
     /* === КНОПКИ ДЕЙСТВИЙ (🚀 Сгенерировать, 🔓 Расшифровать) === */
@@ -91,9 +92,16 @@ def inject_custom_styles() -> None:
         transition: all 0.3s ease !important;
     }
     
+    /* ИСПРАВЛЕНО: Убрана красная рамка, оставлена только синяя */
     .stTextArea textarea:focus {
         border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
+        outline: none !important;
+    }
+    
+    /* Убираем любые другие outline при фокусе */
+    .stTextArea textarea:focus-visible {
+        outline: none !important;
     }
     
     /* === СЕЛЕКТЫ === */
@@ -101,6 +109,28 @@ def inject_custom_styles() -> None:
         border-radius: 10px !important;
         border: 2px solid #dee2e6 !important;
         background: white !important;
+    }
+    
+    /* НОВОЕ: Стилизация для multiselect (Datasets и Entities) */
+    .stMultiSelect > div > div {
+        border-radius: 10px !important;
+        border: 2px solid #dee2e6 !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stMultiSelect > div > div:focus-within {
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
+    }
+    
+    /* Стилизация тегов в multiselect */
+    .stMultiSelect span[data-baseweb="tag"] {
+        background-color: #5a7fb8 !important;
+        color: white !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+        font-size: 0.9em !important;
     }
     
     /* === ЧЕКБОКСЫ === */
@@ -140,6 +170,38 @@ def inject_custom_styles() -> None:
     /* === САЙДБАР === */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%) !important;
+    }
+    
+    /* === УБИРАЕМ КРАСНУЮ РАМКУ У ВСЕХ INPUT-элементов === */
+    input:focus, 
+    textarea:focus, 
+    select:focus,
+    [contenteditable]:focus {
+        outline: none !important;
+    }
+    
+    /* Убираем стандартный outline браузера */
+    *:focus {
+        outline: none !important;
+    }
+    
+    /* НОВОЕ: Анимация исчезновения для success-сообщений */
+    .stSuccess {
+        animation: fadeOut 3s ease-in-out forwards;
+        animation-delay: 2s;
+    }
+    
+    @keyframes fadeOut {
+        0% {
+            opacity: 1;
+        }
+        80% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 0;
+            display: none;
+        }
     }
 </style>
 """, unsafe_allow_html=True)

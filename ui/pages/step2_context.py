@@ -84,10 +84,6 @@ def render_step2() -> None:
     
     with col_left:
         _render_user_query_section()
-        
-        st.write("") 
-        if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
-            _handle_generate_combined()
 
     with col_right:
          _render_result_tabs_section()
@@ -121,37 +117,64 @@ def _render_data_loading_section():
 
 
 def _render_context_selection_section():
+    """ИСПРАВЛЕНО: Стилизация multiselect в общем стиле"""
     loader = st.session_state["loader"]
     all_ds_ids = sorted(list(set(k[2] for k in loader.db['datasets'].keys())))
     all_ent_ids = sorted(list(set(k[2] for k in loader.db['entities'].keys())))
     
+    st.markdown("## 🎯 Выбор контекста")
+    
     col_ds, col_ent = st.columns(2)
     with col_ds:
-        st.multiselect("Datasets (Наборы данных)", all_ds_ids, placeholder="Выберите датасеты...", key="selected_datasets")
+        st.multiselect(
+            "📊 Datasets (Наборы данных)", 
+            all_ds_ids, 
+            placeholder="Выберите датасеты...", 
+            key="selected_datasets",
+            help="Выберите наборы данных для включения в контекст"
+        )
     with col_ent:
-        st.multiselect("Entities (Доп. сущности)", all_ent_ids, placeholder="Выберите сущности...", key="selected_entities")
+        st.multiselect(
+            "🔷 Entities (Доп. сущности)", 
+            all_ent_ids, 
+            placeholder="Выберите сущности...", 
+            key="selected_entities",
+            help="Выберите дополнительные сущности для контекста"
+        )
 
 
 def _render_user_query_section():
-    # Создаем строку с заголовком и кнопками
-    col_title, col_btns = st.columns([2, 1])
+    """ИСПРАВЛЕНО: Кнопки размещены над полем ввода, кнопка генерации - внизу"""
     
-    with col_title:
-        st.subheader("💬 Мой запрос")
-        
-    with col_btns:
-        # Выравниваем кнопки вправо
-        sub_c1, sub_c2 = st.columns([1, 1])
-        with sub_c1:
-            if st.button("🗑️", key="clear_query_btn", help="Очистить запрос", on_click=_clear_user_query, use_container_width=True):
-                pass
-        with sub_c2:
-            # Для копирования берем текст из state
-            text_to_copy = st.session_state.get('user_query', '')
-            if st.button("📋", key="copy_query_btn", help="Копировать запрос", disabled=not text_to_copy, use_container_width=True):
-                copy_to_clipboard(text_to_copy, "copy_query_btn")
-                st.toast("Запрос скопирован!")
-
+    # Заголовок
+    st.subheader("💬 Мой запрос")
+    
+    # Строка с кнопками Очистить/Копировать
+    col_clear, col_copy = st.columns([1, 1])
+    
+    with col_clear:
+        if st.button(
+            "🗑️ Очистить", 
+            key="clear_query_btn", 
+            help="Очистить запрос", 
+            on_click=_clear_user_query, 
+            use_container_width=True
+        ):
+            pass
+    
+    with col_copy:
+        text_to_copy = st.session_state.get('user_query', '')
+        if st.button(
+            "📋 Копировать", 
+            key="copy_query_btn", 
+            help="Копировать запрос", 
+            disabled=not text_to_copy, 
+            use_container_width=True
+        ):
+            copy_to_clipboard(text_to_copy, "copy_query_btn")
+            st.toast("Запрос скопирован!")
+    
+    # Текстовое поле
     st.text_area(
         "Введите ваш запрос", 
         height=TEXTAREA_HEIGHTS["user_query"], 
@@ -159,6 +182,11 @@ def _render_user_query_section():
         key='user_query', 
         label_visibility="collapsed"
     )
+    
+    # Кнопка генерации внизу
+    st.write("")
+    if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
+        _handle_generate_combined()
 
 
 def _render_result_tabs_section():
@@ -167,8 +195,6 @@ def _render_result_tabs_section():
     if not st.session_state.get('final_prompt_masked'):
         st.info("Введите запрос и нажмите кнопку 'Сгенерировать' слева.")
         return
-
-    st.success("Промпт успешно сгенерирован!")
 
     tab_masked, tab_original = st.tabs(["🎭 Замаскированный (Safe)", "👁️ Оригинальный"])
     
@@ -208,11 +234,10 @@ def _render_result_tabs_section():
                     for k, v in sorted_items
                 ]
                 
-                # ИСПРАВЛЕНИЕ: use_container_width=True -> width="stretch"
                 st.dataframe(
                     df_data, 
                     height=400, 
-                    width="stretch", # Исправлено согласно ошибке
+                    use_container_width=True,
                     hide_index=True,
                     column_config={
                         "Category": st.column_config.TextColumn("Категория", width="small"),
@@ -298,5 +323,5 @@ def _handle_generate_combined():
         st.session_state.masking_dictionary = masker.map_forward.copy()
         st.session_state.enable_masking = len(masker.map_forward) > 0
         
-        st.success("Готово! Выберите вкладку справа.")
+        st.toast("✅ Промпт успешно сгенерирован!", icon="✅")
         st.rerun()
