@@ -19,6 +19,14 @@ def _clear_user_query():
     """Очищает поле ввода запроса"""
     st.session_state.user_query = ""
 
+def _update_stored_datasets():
+    """Сохраняет выбор датасетов в постоянное хранилище"""
+    st.session_state.stored_datasets = st.session_state.selected_datasets
+
+def _update_stored_entities():
+    """Сохраняет выбор сущностей в постоянное хранилище"""
+    st.session_state.stored_entities = st.session_state.selected_entities
+
 def render_step2() -> None:
     """Рендерит шаг 2: Генерация промпта с маскированием"""
     logger.info("Рендер шага 2: Генерация промпта")
@@ -108,6 +116,11 @@ def _render_data_loading_section():
                     raw_data = db_manager.fetch_namespace_context(ns_id)
                     st.session_state["loader"] = DbDataLoader(raw_data)
                     st.session_state["current_ns_loaded"] = ns_id
+                    
+                    # Сброс сохраненных выборов при загрузке нового контекста
+                    st.session_state["stored_datasets"] = []
+                    st.session_state["stored_entities"] = []
+                    
                     st.toast(f"Данные загружены: {sum(len(v) for v in raw_data.values())} записей", icon="✅")
                 except Exception as e:
                     st.error(f"Ошибка: {e}")
@@ -117,12 +130,18 @@ def _render_data_loading_section():
 
 
 def _render_context_selection_section():
-    """ИСПРАВЛЕНО: Стилизация multiselect в общем стиле"""
+    """Рендеринг выбора контекста с поддержкой персистентности"""
     loader = st.session_state["loader"]
     all_ds_ids = sorted(list(set(k[2] for k in loader.db['datasets'].keys())))
     all_ent_ids = sorted(list(set(k[2] for k in loader.db['entities'].keys())))
     
-    st.markdown("## 🎯 Выбор контекста")
+    st.subheader("🎯 Выбор контекста")
+    
+    # Инициализация хранилища, если его нет (на случай первого запуска)
+    if "stored_datasets" not in st.session_state:
+        st.session_state["stored_datasets"] = []
+    if "stored_entities" not in st.session_state:
+        st.session_state["stored_entities"] = []
     
     col_ds, col_ent = st.columns(2)
     with col_ds:
@@ -131,6 +150,8 @@ def _render_context_selection_section():
             all_ds_ids, 
             placeholder="Выберите датасеты...", 
             key="selected_datasets",
+            default=st.session_state["stored_datasets"],  # Загружаем из хранилища
+            on_change=_update_stored_datasets,            # Сохраняем при изменении
             help="Выберите наборы данных для включения в контекст"
         )
     with col_ent:
@@ -139,12 +160,14 @@ def _render_context_selection_section():
             all_ent_ids, 
             placeholder="Выберите сущности...", 
             key="selected_entities",
+            default=st.session_state["stored_entities"],  # Загружаем из хранилища
+            on_change=_update_stored_entities,            # Сохраняем при изменении
             help="Выберите дополнительные сущности для контекста"
         )
 
 
 def _render_user_query_section():
-    """ИСПРАВЛЕНО: Кнопки размещены над полем ввода, кнопка генерации - внизу"""
+    """Рендеринг секции пользовательского запроса"""
     
     # Заголовок
     st.subheader("💬 Мой запрос")
@@ -237,7 +260,7 @@ def _render_result_tabs_section():
                 st.dataframe(
                     df_data, 
                     height=400, 
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                     column_config={
                         "Category": st.column_config.TextColumn("Категория", width="small"),
@@ -271,6 +294,9 @@ def _handle_generate_combined():
         return
 
     loader = st.session_state["loader"]
+    
+    # Читаем данные из виджетов. Если кнопка нажата, значит виджеты существуют,
+    # и st.session_state["selected_datasets"] содержит актуальные данные.
     datasets = st.session_state.get("selected_datasets", [])
     entities = st.session_state.get("selected_entities", [])
     
