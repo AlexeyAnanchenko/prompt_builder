@@ -54,8 +54,6 @@ def render_step2() -> None:
     st.markdown("---")
 
     # --- ОСНОВНАЯ РАЗМЕТКА ---
-    # Здесь вы можете вручную менять ширину колонок.
-    # Сейчас стоит 30% для левой части (ввод) и 70% для правой (результат).
     col_left, col_right = st.columns([30, 70])
     
     with col_left:
@@ -98,40 +96,108 @@ def _render_data_loading_section():
 
 
 def _render_context_selection_section():
-    """Рендеринг выбора контекста с поддержкой персистентности"""
+    """Рендеринг выбора контекста с поддержкой персистентности и кнопкой подбора"""
     loader = st.session_state["loader"]
     all_ds_ids = sorted(list(set(k[2] for k in loader.db['datasets'].keys())))
     all_ent_ids = sorted(list(set(k[2] for k in loader.db['entities'].keys())))
     
     st.subheader("🎯 Выбор контекста")
     
-    # Инициализация хранилища, если его нет (на случай первого запуска)
+    # Инициализация хранилища
     if "stored_datasets" not in st.session_state:
         st.session_state["stored_datasets"] = []
     if "stored_entities" not in st.session_state:
         st.session_state["stored_entities"] = []
     
-    col_ds, col_ent = st.columns(2)
+    # НОВОЕ: Три колонки - datasets, entities, кнопка подбора
+    col_ds, col_ent, col_btn = st.columns([5, 5, 2])
+    
     with col_ds:
         st.multiselect(
             "📊 Datasets (Наборы данных)", 
             all_ds_ids, 
             placeholder="Выберите датасеты...", 
             key="selected_datasets",
-            default=st.session_state["stored_datasets"],  # Загружаем из хранилища
-            on_change=_update_stored_datasets,            # Сохраняем при изменении
+            default=st.session_state["stored_datasets"],
+            on_change=_update_stored_datasets,
             help="Выберите наборы данных для включения в контекст"
         )
+    
     with col_ent:
         st.multiselect(
             "🔷 Entities (Доп. сущности)", 
             all_ent_ids, 
             placeholder="Выберите сущности...", 
             key="selected_entities",
-            default=st.session_state["stored_entities"],  # Загружаем из хранилища
-            on_change=_update_stored_entities,            # Сохраняем при изменении
+            default=st.session_state["stored_entities"],
+            on_change=_update_stored_entities,
             help="Выберите дополнительные сущности для контекста"
         )
+    
+    with col_btn:
+        # Добавляем отступ сверху для выравнивания с мультиселектами
+        st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+        
+        if st.button(
+            "🔍 Подобрать контекст",
+            type="secondary",
+            use_container_width=True,
+            help="Подобрать контекст из БД на основе выбранных сущностей и датасетов, сразу с маскированием"
+        ):
+            _handle_context_pickup()
+
+
+def _handle_context_pickup():
+    """Обработчик кнопки 'Подобрать контекст' - генерирует SQL и создаёт словарь масок"""
+    
+    if "loader" not in st.session_state:
+        st.error("Данные не загружены.")
+        return
+    
+    loader = st.session_state["loader"]
+    masker = st.session_state["masker"]
+    
+    # Очищаем предыдущий словарь масок
+    masker.clear()
+    
+    # Читаем выбранные датасеты и сущности
+    datasets = st.session_state.get("selected_datasets", [])
+    entities = st.session_state.get("selected_entities", [])
+    
+    if not datasets and not entities:
+        st.warning("⚠️ Выберите хотя бы один датасет или сущность для подбора контекста.")
+        return
+    
+    with st.spinner("Анализ графа, генерация контекста и построение словаря масок..."):
+        try:
+            # Резолвим контекст
+            resolver = ContextResolver(loader)
+            for ds in datasets:
+                resolver.resolve_by_dataset(ds)
+            for ent in entities:
+                resolver.resolve_by_entity(ent)
+            
+            # Генерируем SQL с маскированием
+            gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
+            sql_masked = gen_masked.generate_sql()
+            
+            # Сохраняем результаты в session_state
+            st.session_state.context_sql_masked = sql_masked
+            st.session_state.masking_dictionary = masker.map_forward.copy()
+            st.session_state.enable_masking = len(masker.map_forward) > 0
+            
+            # Информируем пользователя
+            mask_count = len(masker.map_forward)
+            st.toast(f"✅ Контекст подобран! Создано масок: {mask_count}")
+            
+            logger.info(f"Контекст подобран: {mask_count} элементов замаскировано")
+            
+            # ВАЖНО: Перерисовываем интерфейс, чтобы показать словарь
+            st.rerun()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при подборе контекста: {e}")
+            st.error(f"Ошибка при подборе контекста: {e}")
 
 
 def _render_user_query_section():
@@ -140,7 +206,16 @@ def _render_user_query_section():
     # Заголовок
     st.subheader("💬 Мой запрос")
     
-    # Строка с кнопками Очистить/Копировать
+    # Текстовое поле
+    st.text_area(
+        "Введите ваш запрос", 
+        height=TEXTAREA_HEIGHTS["user_query"], 
+        placeholder="Опишите, что нужно сделать с конфигурацией (например: 'Добавь фильтр по salaryAmount')...", 
+        key='user_query', 
+        label_visibility="collapsed"
+    )
+    
+    # НОВОЕ: Кнопки Очистить/Копировать НИЖЕ текстового поля, но ВЫШЕ кнопки генерации
     col_clear, col_copy = st.columns([1, 1])
     
     with col_clear:
@@ -165,17 +240,10 @@ def _render_user_query_section():
             copy_to_clipboard(text_to_copy, "copy_query_btn")
             st.toast("Текст скопирован!", icon="✅")
     
-    # Текстовое поле
-    st.text_area(
-        "Введите ваш запрос", 
-        height=TEXTAREA_HEIGHTS["user_query"], 
-        placeholder="Опишите, что нужно сделать с конфигурацией (например: 'Добавь фильтр по salaryAmount')...", 
-        key='user_query', 
-        label_visibility="collapsed"
-    )
+    # Небольшой отступ перед кнопкой генерации
+    st.write("")
     
     # Кнопка генерации внизу
-    st.write("")
     if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
         _handle_generate_combined()
 
@@ -183,13 +251,46 @@ def _render_user_query_section():
 def _render_result_tabs_section():
     st.subheader("✨ Результат")
     
+    # НОВОЕ: Показываем словарь замен, если он уже создан (после "Подобрать контекст")
+    masker = st.session_state.get("masker")
+    if masker and masker.map_forward and not st.session_state.get('final_prompt_masked'):
+        with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=True):
+            st.caption("✨ Контекст подобран! Используйте эти названия в вашем запросе.")
+            
+            def natural_sort_key(item):
+                mask_val = item[1]
+                try:
+                    prefix, num = mask_val.rsplit('_', 1)
+                    return (prefix, int(num))
+                except ValueError:
+                    return (mask_val, 0)
+
+            sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
+            
+            df_data = [
+                {"Category": k[0], "Real Name": k[1], "Mask": v} 
+                for k, v in sorted_items
+            ]
+            
+            st.dataframe(
+                df_data, 
+                height=400, 
+                width='stretch',
+                hide_index=True,
+                column_config={
+                    "Category": st.column_config.TextColumn("Категория", width="small"),
+                    "Real Name": st.column_config.TextColumn("Реальное имя"),
+                    "Mask": st.column_config.TextColumn("Маска", width="small"),
+                }
+            )
+        return
+    
     if not st.session_state.get('final_prompt_masked'):
         st.info("Введите запрос и нажмите кнопку 'Сгенерировать' слева.")
         return
 
     tab_masked, tab_original = st.tabs(["🎭 Замаскированный (Safe)", "👁️ Оригинальный"])
     
-    masker = st.session_state.get("masker")
     token_count = st.session_state.get('token_count', 0)
     
     # Высота прокручиваемой области в пикселях
@@ -203,12 +304,11 @@ def _render_result_tabs_section():
         st.caption("Этот текст безопасен для отправки в публичную LLM.")
 
         with st.expander("📄 Показать текст промпта", expanded=True):
-            # Контейнер с фиксированной высотой = скролл всегда активен, если контент больше
             with st.container(height=SCROLL_HEIGHT):
                 st.code(masked_text, language="sql", line_numbers=True)
         
-    if masker and masker.map_forward:
-             with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
+        if masker and masker.map_forward:
+            with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
                 
                 def natural_sort_key(item):
                     mask_val = item[1]
@@ -245,17 +345,15 @@ def _render_result_tabs_section():
         st.caption("Внимание! Содержит реальные названия полей и конфигураций.")
         
         with st.expander("📄 Показать оригинальный промпт", expanded=True):
-            # Контейнер с фиксированной высотой
             with st.container(height=SCROLL_HEIGHT):
                 st.code(orig_text, language="sql", line_numbers=True)
 
 
 def _handle_generate_combined():
+    """Обработчик генерации финального промпта"""
 
     ns_id = st.session_state.selected_namespace.split(' ')[0]
     masker = st.session_state["masker"]
-    
-    masker.clear()
     
     if "loader" not in st.session_state:
         st.error("Данные не загружены.")
@@ -263,8 +361,6 @@ def _handle_generate_combined():
 
     loader = st.session_state["loader"]
     
-    # Читаем данные из виджетов. Если кнопка нажата, значит виджеты существуют,
-    # и st.session_state["selected_datasets"] содержит актуальные данные.
     datasets = st.session_state.get("selected_datasets", [])
     entities = st.session_state.get("selected_entities", [])
     
