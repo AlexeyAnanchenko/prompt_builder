@@ -71,12 +71,10 @@ def _render_save_version_tab(version_manager: VersionManager) -> None:
         if 'save_version_ui_input' not in st.session_state:
             st.session_state.save_version_ui_input = st.session_state.get('current_version', '')
         
-        # ❌ УДАЛИТЕ параметр value= полностью!
-        # Streamlit автоматически использует st.session_state.save_version_ui_input
         st.text_input(
             "Название версии",
             placeholder="Например: v1.0",
-            key="save_version_ui_input",  # <-- Только key, БЕЗ value!
+            key="save_version_ui_input",
             label_visibility="collapsed"
         )
     
@@ -142,14 +140,11 @@ def _render_system_prompt_textarea() -> None:
         """Копируем из виджета в 'вечное' хранилище"""
         st.session_state.system_prompt = st.session_state.sys_prompt_widget
 
-    # ✅ УБИРАЕМ value=, оставляем только key=
-    # Streamlit автоматически использует st.session_state.sys_prompt_widget
     st.text_area(
         version_label,
-        # ❌ УДАЛИТЕ ЭТУ СТРОКУ: value=st.session_state.get('sys_prompt_widget', st.session_state.system_prompt),
         height=TEXTAREA_HEIGHTS["system_prompt"],
         placeholder="Введите системный промпт здесь...",
-        key='sys_prompt_widget',  # ✅ Только key, БЕЗ value
+        key='sys_prompt_widget',
         on_change=on_text_change,
         help="Этот текст будет добавлен в начало финального промпта"
     )
