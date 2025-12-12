@@ -163,7 +163,7 @@ def _render_user_query_section():
             use_container_width=True
         ):
             copy_to_clipboard(text_to_copy, "copy_query_btn")
-            st.toast("Запрос скопирован!")
+            st.toast("Текст скопирован!", icon="✅")
     
     # Текстовое поле
     st.text_area(

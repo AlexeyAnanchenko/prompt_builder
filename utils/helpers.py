@@ -1,6 +1,7 @@
 import json
-from typing import Optional
+import streamlit as st
 import streamlit.components.v1 as components
+from typing import Optional
 from utils.logger import setup_logger
 
 # Настраиваем логгер для модуля
@@ -16,72 +17,68 @@ def count_tokens(text: str) -> int:
 
 def copy_to_clipboard(text: str, button_key: str) -> None:
     """
-    Копирует текст и СКРЫВАЕТ контейнер скрипта, чтобы не было отступов.
+    Копирует текст в буфер обмена.
+    
+    ВАЖНО: Компонент вставляется в st.sidebar, чтобы избежать 
+    сдвига верстки (появления отступов) в основной части экрана.
     """
     logger.info(f"Копирование текста (ключ: {button_key})")
     
     safe_text = json.dumps(text)
     
+    # Современный и надежный способ копирования через Clipboard API
+    # с фоллбэком для старых браузеров
     js_code = f"""
     <script>
-        // 1. Функция копирования
-        function copyToClipboard() {{
+        function copyText() {{
+            const text = {safe_text};
+            
+            // 1. Попытка через современный API (работает в HTTPS)
+            if (navigator.clipboard && window.isSecureContext) {{
+                navigator.clipboard.writeText(text).then(() => {{
+                    console.log('Copied via Clipboard API');
+                }}).catch(err => {{
+                    console.error('Clipboard API failed', err);
+                    fallbackCopy(text);
+                }});
+            }} else {{
+                // 2. Фоллбэк через textarea
+                fallbackCopy(text);
+            }}
+        }}
+        
+        function fallbackCopy(text) {{
+            const parentDoc = window.parent.document;
+            const textArea = parentDoc.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            parentDoc.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
             try {{
-                const parentDoc = window.parent.document;
-                const textArea = parentDoc.createElement("textarea");
-                textArea.value = {safe_text};
-                textArea.style.position = "fixed";
-                textArea.style.left = "-9999px";
-                textArea.style.top = "0";
-                parentDoc.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
                 parentDoc.execCommand('copy');
-                parentDoc.body.removeChild(textArea);
             }} catch (err) {{
-                console.error('Copy failed', err);
+                console.error('Fallback copy failed', err);
             }}
+            parentDoc.body.removeChild(textArea);
         }}
-
-        // 2. Функция "Самоуничтожения" контейнера (убирает отступы)
-        function hideMyContainer() {{
-            try {{
-                // Получаем iframe, в котором выполняется этот скрипт
-                const iframe = window.frameElement;
-                if (!iframe) return;
-
-                // Ищем родительский контейнер Streamlit (обычно имеет класс element-container)
-                // Поднимаемся на несколько уровней вверх, чтобы найти блок, занимающий место
-                let el = iframe;
-                while (el) {{
-                    // Проверяем классы контейнеров Streamlit
-                    if (el.classList && (el.classList.contains('element-container') || el.classList.contains('stElementContainer'))) {{
-                        el.style.display = 'none'; // Полностью убираем из верстки
-                        break;
-                    }}
-                    // Ограничитель, чтобы не скрыть всё приложение
-                    if (el.tagName === 'BODY') break;
-                    
-                    el = el.parentElement;
-                }}
-            }} catch (e) {{
-                console.error('Hide container failed', e);
-            }}
-        }}
-
+        
         // Запуск
-        copyToClipboard();
-        hideMyContainer();
+        copyText();
     </script>
     """
     
-    # Высота 0 все равно нужна для инициализации
-    components.html(js_code, height=0, width=0)
-    logger.info("JS отправлен")
+    # === МАГИЯ ЗДЕСЬ ===
+    # Мы рендерим компонент внутри sidebar. 
+    # Это убирает визуальный "скачок" в основной колонке.
+    with st.sidebar:
+        components.html(js_code, height=0, width=0)
+        
+    logger.info("JS отправлен в сайдбар")
+
 
 def safe_strip(value: Optional[str]) -> str:
-    """
-    Безопасная обрезка строки
-    """
+    """Безопасная обрезка строки"""
     result = (value or "").strip()
     return result
