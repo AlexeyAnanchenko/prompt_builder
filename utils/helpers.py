@@ -1,65 +1,87 @@
+import json
 from typing import Optional
 import streamlit.components.v1 as components
 from utils.logger import setup_logger
 
-
 # Настраиваем логгер для модуля
 logger = setup_logger(__name__)
-
 
 def count_tokens(text: str) -> int:
     """
     Подсчёт токенов в тексте (упрощённая версия)
-    
-    Args:
-        text: Текст для подсчёта
-        
-    Returns:
-        Примерное количество токенов
     """
     from config.settings import TOKEN_MULTIPLIER
     token_count = int(len(text.split()) * TOKEN_MULTIPLIER)
-    logger.debug(f"Подсчёт токенов: {len(text.split())} слов → {token_count} токенов")
     return token_count
-
 
 def copy_to_clipboard(text: str, button_key: str) -> None:
     """
-    Универсальная функция для копирования текста в буфер обмена
-    
-    Args:
-        text: Текст для копирования
-        button_key: Уникальный ключ для элемента
+    Копирует текст и СКРЫВАЕТ контейнер скрипта, чтобы не было отступов.
     """
-    logger.info(f"Копирование текста длиной {len(text)} символов в буфер обмена (ключ: {button_key})")
-    import streamlit as st
+    logger.info(f"Копирование текста (ключ: {button_key})")
     
-    st.write(
-        f'<textarea id="{button_key}" style="position: absolute; left: -9999px;">{text}</textarea>',
-        unsafe_allow_html=True
-    )
-    components.html(f"""
-        <script>
-            var copyText = window.parent.document.getElementById("{button_key}");
-            if (copyText) {{
-                copyText.select();
-                window.parent.document.execCommand("copy");
+    safe_text = json.dumps(text)
+    
+    js_code = f"""
+    <script>
+        // 1. Функция копирования
+        function copyToClipboard() {{
+            try {{
+                const parentDoc = window.parent.document;
+                const textArea = parentDoc.createElement("textarea");
+                textArea.value = {safe_text};
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                parentDoc.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                parentDoc.execCommand('copy');
+                parentDoc.body.removeChild(textArea);
+            }} catch (err) {{
+                console.error('Copy failed', err);
             }}
-        </script>
-    """, height=0)
-    logger.info("Текст успешно скопирован в буфер обмена")
+        }}
 
+        // 2. Функция "Самоуничтожения" контейнера (убирает отступы)
+        function hideMyContainer() {{
+            try {{
+                // Получаем iframe, в котором выполняется этот скрипт
+                const iframe = window.frameElement;
+                if (!iframe) return;
+
+                // Ищем родительский контейнер Streamlit (обычно имеет класс element-container)
+                // Поднимаемся на несколько уровней вверх, чтобы найти блок, занимающий место
+                let el = iframe;
+                while (el) {{
+                    // Проверяем классы контейнеров Streamlit
+                    if (el.classList && (el.classList.contains('element-container') || el.classList.contains('stElementContainer'))) {{
+                        el.style.display = 'none'; // Полностью убираем из верстки
+                        break;
+                    }}
+                    // Ограничитель, чтобы не скрыть всё приложение
+                    if (el.tagName === 'BODY') break;
+                    
+                    el = el.parentElement;
+                }}
+            }} catch (e) {{
+                console.error('Hide container failed', e);
+            }}
+        }}
+
+        // Запуск
+        copyToClipboard();
+        hideMyContainer();
+    </script>
+    """
+    
+    # Высота 0 все равно нужна для инициализации
+    components.html(js_code, height=0, width=0)
+    logger.info("JS отправлен")
 
 def safe_strip(value: Optional[str]) -> str:
     """
-    Безопасная обрезка строки с обработкой None
-    
-    Args:
-        value: Строка или None
-        
-    Returns:
-        Обрезанная строка или пустая строка
+    Безопасная обрезка строки
     """
     result = (value or "").strip()
-    logger.debug(f"Безопасная обрезка: '{value}' → '{result}'")
     return result
