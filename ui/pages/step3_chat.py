@@ -115,10 +115,12 @@ def render_step3() -> None:
 
     # === ОТРИСОВКА ИНТЕРФЕЙСА ===
 
-    # 1. Визуальные настройки
-    with st.expander("⚙️ Визуальные настройки (Размер и Пропорции)", expanded=st.session_state.show_visual_settings):
-        col_set_1, col_set_2 = st.columns([1, 1])
-        with col_set_1:
+    # 1. Верхняя панель: Настройки слева, Словарь справа
+    col_controls, col_dictionary = st.columns([1, 1])
+    
+    with col_controls:
+        # Визуальные настройки
+        with st.expander("⚙️ Визуальные настройки", expanded=st.session_state.show_visual_settings):
             new_height = st.slider(
                 "Высота окон (px)", 300, 1200, 
                 st.session_state.chat_textarea_height, 50
@@ -126,7 +128,6 @@ def render_step3() -> None:
             if new_height != st.session_state.chat_textarea_height:
                 st.session_state.chat_textarea_height = new_height
                 
-        with col_set_2:
             new_ratio = st.slider(
                 "Баланс колонок (Лево % / Право %)", 20, 80, 
                 st.session_state.chat_column_ratio, 5
@@ -134,28 +135,56 @@ def render_step3() -> None:
             if new_ratio != st.session_state.chat_column_ratio:
                 st.session_state.chat_column_ratio = new_ratio
                 st.rerun()
-
-    # 2. Верхняя панель управления
-    col_mode, col_clear = st.columns([1, 1])
-    with col_mode:
-        view_icon = "📝" if st.session_state.chat_view_mode == "preview" else "📖"
-        view_label = "Редактировать" if st.session_state.chat_view_mode == "preview" else "Просмотр (Markdown)"
-        if st.button(f"{view_icon} {view_label}", key="toggle_view_mode", use_container_width=True):
-            toggle_view_mode()
-            st.rerun()
+        
+        # Кнопки управления режимом и очисткой
+        col_mode, col_clear = st.columns([1, 1])
+        with col_mode:
+            view_icon = "📝" if st.session_state.chat_view_mode == "preview" else "📖"
+            view_label = "Редактировать" if st.session_state.chat_view_mode == "preview" else "Просмотр (Markdown)"
+            if st.button(f"{view_icon} {view_label}", key="toggle_view_mode", width='stretch'):
+                toggle_view_mode()
+                st.rerun()
+        
+        with col_clear:
+            if st.button("🗑️ Очистить всё", key="clear_both_btn", width='stretch'):
+                on_clear_both()
+                st.rerun()
     
-    with col_clear:
-        if st.button("🗑️ Очистить всё", key="clear_both_btn", use_container_width=True):
-            on_clear_both()
-            st.rerun() # Важно сделать реран для визуального обновления
+    with col_dictionary:
+        # Словарь замен
+        with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
+            def natural_sort_key(item):
+                mask_val = item[1]
+                try:
+                    prefix, num = mask_val.rsplit('_', 1)
+                    return (prefix, int(num))
+                except ValueError:
+                    return (mask_val, 0)
+
+            sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
+            
+            df_data = [
+                {"Category": k[0], "Real Name": k[1], "Mask": v} 
+                for k, v in sorted_items
+            ]
+            
+            st.dataframe(
+                df_data, 
+                height=300, 
+                width='stretch',
+                hide_index=True,
+                column_config={
+                    "Category": st.column_config.TextColumn("Категория", width="small"),
+                    "Real Name": st.column_config.TextColumn("Реальное имя"),
+                    "Mask": st.column_config.TextColumn("Маска", width="small"),
+                }
+            )
 
     st.markdown("---")
 
-    # 3. Расчет ширины колонок
-    # Используем относительные веса. Центральная колонка узкая (фиксированный вес 1).
-    # Остальное распределяем по ratio.
+    # 2. Расчет ширины колонок
     ratio = st.session_state.chat_column_ratio / 100.0
-    total_flex = 20 # Условная общая ширина
+    total_flex = 20
     center_flex = 1.5
     
     left_flex = (total_flex - center_flex) * ratio
@@ -171,8 +200,6 @@ def render_step3() -> None:
         st.subheader("👨‍💻 Реальные данные")
         
         if not is_preview:
-            # Важно: value берем из session_state, если ключа виджета еще нет
-            # Если ключ есть, Streamlit сам управляет value, но мы обновляем его через update_widget_state
             if KEY_WIDGET_HUMAN not in st.session_state:
                 st.session_state[KEY_WIDGET_HUMAN] = st.session_state.chat_data_human
                 
@@ -180,7 +207,7 @@ def render_step3() -> None:
                 "Human Input",
                 key=KEY_WIDGET_HUMAN,
                 height=height,
-                on_change=sync_state, # Сохраняем при вводе
+                on_change=sync_state,
                 label_visibility="collapsed",
                 placeholder="Введите текст с реальными данными..."
             )
@@ -191,7 +218,6 @@ def render_step3() -> None:
                 clear_callback=on_clear_human
             )
         else:
-            # Preview Mode
             with st.container(height=height, border=True):
                 if st.session_state.chat_data_human:
                     st.markdown(st.session_state.chat_data_human)
@@ -201,12 +227,11 @@ def render_step3() -> None:
     # === ЦЕНТРАЛЬНАЯ КОЛОНКА (КНОПКИ) ===
     with col_actions:
         if not is_preview:
-            # Центрирование по вертикали
             st.markdown(f"<div style='height: {height // 2 - 40}px;'></div>", unsafe_allow_html=True)
             
-            st.button("➡️", key="btn_enc", use_container_width=True, help="Зашифровать", on_click=on_encrypt_click)
+            st.button("➡️", key="btn_enc", width='stretch', help="Зашифровать", on_click=on_encrypt_click)
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            st.button("⬅️", key="btn_dec", use_container_width=True, help="Расшифровать", on_click=on_decrypt_click)
+            st.button("⬅️", key="btn_dec", width='stretch', help="Расшифровать", on_click=on_decrypt_click)
 
     # === ПРАВАЯ КОЛОНКА (LLM) ===
     with col_llm:
@@ -231,7 +256,6 @@ def render_step3() -> None:
                 clear_callback=on_clear_llm
             )
         else:
-            # Preview Mode
             with st.container(height=height, border=True):
                 if st.session_state.chat_data_llm:
                     st.markdown(st.session_state.chat_data_llm)
