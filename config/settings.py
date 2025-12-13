@@ -13,7 +13,7 @@ VERSIONS_FILE: Path = Path("prompt_versions.json")
 # Конфигурация страницы
 PAGE_CONFIG: Dict = {
     "page_title": "Prompt Builder",
-    "page_icon": "🅿",
+    "page_icon": "🖊",
     "layout": "wide",
     "initial_sidebar_state": "collapsed"
 }
