@@ -24,6 +24,37 @@ def inject_custom_styles() -> None:
         width: 100%;
     }
     
+    /* ================================================================= */
+    /* === УНИВЕРСАЛЬНАЯ СТИЛИЗАЦИЯ ВСЕХ КНОПОК ПРИ НАВЕДЕНИИ ===        */
+    /* ================================================================= */
+    
+    /* Базовая стилизация для всех кнопок */
+    button[kind="primary"],
+    button[kind="secondary"],
+    .stButton button,
+    button[data-testid*="stBaseButton"] {
+        transition: all 0.2s ease !important;
+        position: relative !important;
+    }
+    
+    /* ГЛАВНОЕ ПРАВИЛО: Синяя рамка при наведении на ВСЕ кнопки */
+    button[kind="primary"]:hover:not(:disabled),
+    button[kind="secondary"]:hover:not(:disabled),
+    .stButton button:hover:not(:disabled),
+    button[data-testid*="stBaseButton"]:hover:not(:disabled) {
+        border: 2px solid #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
+    }
+    
+    /* Дополнительно: лёгкий сдвиг вверх для всех кнопок */
+    button[kind="primary"]:hover:not(:disabled),
+    button[kind="secondary"]:hover:not(:disabled),
+    .stButton button:hover:not(:disabled) {
+        transform: translateY(-1px) !important;
+    }
+    
+    /* ================================================================= */
+    
     /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) === */
     button[kind="primary"] {
         background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
@@ -37,9 +68,9 @@ def inject_custom_styles() -> None:
         margin: 20px 0 15px 0 !important;
     }
     
-    button[kind="primary"]:hover {
+    button[kind="primary"]:hover:not(:disabled) {
         background: linear-gradient(135deg, #4a6fa0 0%, #5a7fb8 100%) !important;
-        transform: translateY(-1px) scale(1.005) !important;
+        /* Синяя рамка уже добавлена выше */
     }
     
     /* === КНОПКИ ДЕЙСТВИЙ (Зеленые) === */
@@ -52,9 +83,9 @@ def inject_custom_styles() -> None:
         box-shadow: 0 2px 10px rgba(53, 168, 91, 0.25) !important;
     }
     
-    .stColumn button[kind="primary"]:hover {
+    .stColumn button[kind="primary"]:hover:not(:disabled) {
         background: #298146 !important;
-        transform: translateY(-2px) scale(1.02) !important;
+        /* Синяя рамка уже добавлена выше */
     }
     
     /* === ВТОРИЧНЫЕ КНОПКИ === */
@@ -64,6 +95,8 @@ def inject_custom_styles() -> None:
         border: 1.5px solid #adb5bd !important;
         border-radius: 8px !important;
     }
+    
+    /* При наведении на вторичные кнопки - синяя рамка добавлена выше */
 
     /* ================================================================= */
     /* !!! ВАЖНОЕ ИСПРАВЛЕНИЕ РАМОК (INPUTS & TEXTAREAS) !!!             */
