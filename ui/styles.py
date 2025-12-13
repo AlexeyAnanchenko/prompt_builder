@@ -34,7 +34,6 @@ def inject_custom_styles() -> None:
     .stButton button,
     button[data-testid*="stBaseButton"] {
         transition: all 0.2s ease !important;
-        position: relative !important;
     }
     
     /* ГЛАВНОЕ ПРАВИЛО: Синяя рамка при наведении на ВСЕ кнопки */
@@ -46,31 +45,27 @@ def inject_custom_styles() -> None:
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
     }
     
-    /* Дополнительно: лёгкий сдвиг вверх для всех кнопок */
-    button[kind="primary"]:hover:not(:disabled),
-    button[kind="secondary"]:hover:not(:disabled),
-    .stButton button:hover:not(:disabled) {
-        transform: translateY(-1px) !important;
-    }
-    
     /* ================================================================= */
     
     /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) === */
     button[kind="primary"] {
         background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
         color: white !important;
-        border: none !important;
+        border: 2px solid transparent !important; /* Прозрачная рамка, чтобы не было дёрганья */
         padding: 15px 20px !important;
         border-radius: 12px !important;
         font-size: 1.1em !important;
         font-weight: 600 !important;
         box-shadow: 0 3px 12px rgba(90, 127, 184, 0.2) !important;
         margin: 20px 0 15px 0 !important;
+        transition: all 0.2s ease !important;
     }
     
     button[kind="primary"]:hover:not(:disabled) {
         background: linear-gradient(135deg, #4a6fa0 0%, #5a7fb8 100%) !important;
-        /* Синяя рамка уже добавлена выше */
+        border-color: #5a7fb8 !important; /* Проявляем рамку */
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
+        transform: translateY(-1px) !important; /* Лёгкое приподнимание */
     }
     
     /* === КНОПКИ ДЕЙСТВИЙ (Зеленые) === */
@@ -212,6 +207,53 @@ def inject_custom_styles() -> None:
         padding: 10px 15px;
         border-radius: 8px;
         border: 1px solid #dee2e6;
+    }
+    
+    /* ================================================================= */
+    /* === СТИЛИЗАЦИЯ EXPANDER-ОВ === */
+    /* ================================================================= */
+    
+    /* Основной контейнер expander-а */
+    div[data-testid="stExpander"] {
+        background: #ffffff !important;
+        border: 1px solid #dee2e6 !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        margin: 5px 0 !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    /* При наведении на весь expander */
+    div[data-testid="stExpander"]:hover {
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 2px rgba(90, 127, 184, 0.1) !important;
+    }
+    
+    /* Заголовок expander-а */
+    div[data-testid="stExpander"] details summary {
+        background: #f8f9fa !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        font-weight: 500 !important;
+        color: #495057 !important;
+        cursor: pointer !important;
+        font-size: 0.9em !important;
+    }
+    
+    /* При наведении на заголовок */
+    div[data-testid="stExpander"] details summary:hover {
+        background: #e9ecef !important;
+    }
+    
+    /* Содержимое expander-а */
+    div[data-testid="stExpander"] details[open] {
+        background: #ffffff !important;
+    }
+    
+    /* Стрелка раскрытия */
+    div[data-testid="stExpander"] details summary svg {
+        stroke: #5a7fb8 !important;
+        stroke-width: 1.8 !important;
     }
     
     /* === МЕТРИКИ И ТЕКСТ === */
