@@ -210,7 +210,7 @@ def render_step3() -> None:
 
     # === ПРАВАЯ КОЛОНКА (LLM) ===
     with col_llm:
-        st.subheader("🤖 Маски (Для LLM)")
+        st.subheader("🎭 Замаскированный текст (Для LLM)")
         
         if not is_preview:
             if KEY_WIDGET_LLM not in st.session_state:
