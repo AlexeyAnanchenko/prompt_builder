@@ -10,7 +10,7 @@ logger = setup_logger(__name__)
 
 
 def render_animated_header() -> None:
-    """Рендерит анимированный заголовок приложения"""
+    """Рендерит анимированный заголовок приложения с эффектом печатающей машинки"""
     logger.info("Рендер анимированного заголовка")
     components.html("""
 <style>
@@ -23,34 +23,24 @@ def render_animated_header() -> None:
         padding: 0;
         user-select: none;
         font-family: "Source Sans Pro", sans-serif;
-        
-        /* === ИСПРАВЛЕНИЕ ЦЕНТРИРОВАНИЯ === */
-        /* Сдвигаем контейнер влево на 50px */
-        /* Регулируйте это число (-50px), если нужно сдвинуть сильнее или слабее */
-        transform: translateX(-50px); 
+        transform: translateX(-15px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
     
-    .hammer-emoji {
-        display: inline-block;
+    .typewriter-emoji {
         font-size: 1.2em;
         margin-right: 15px;
         cursor: pointer;
-        transform-origin: bottom right;
+        flex-shrink: 0;
+        position: relative;
+        top: -8px;
     }
     
-    @keyframes hammer-swing {
-        0% { transform: rotate(0deg); }
-        15% { transform: rotate(-35deg); }
-        30% { transform: rotate(25deg); }
-        45% { transform: rotate(-20deg); }
-        60% { transform: rotate(15deg); }
-        75% { transform: rotate(-10deg); }
-        90% { transform: rotate(5deg); }
-        100% { transform: rotate(0deg); }
-    }
-    
-    .hammer-animate {
-        animation: hammer-swing 0.8s ease-in-out;
+    .title-wrapper {
+        display: inline-block;
+        position: relative;
     }
     
     .title-text {
@@ -58,21 +48,74 @@ def render_animated_header() -> None:
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+        display: inline-block;
+    }
+    
+    .cursor {
+        display: inline-block;
+        width: 3px;
+        height: 1em;
+        background-color: #5a7fb8;
+        margin-left: 2px;
+        vertical-align: text-bottom;
+        opacity: 0;
+    }
+    
+    .cursor.blink {
+        animation: blink-caret 0.75s step-end infinite;
+        opacity: 1;
+    }
+    
+    @keyframes blink-caret {
+        from, to { opacity: 1; }
+        50% { opacity: 0; }
     }
 </style>
 
 <div class="animated-title">
-    <span class="hammer-emoji" id="hammer">🔨</span>
-    <span class="title-text">Prompt Builder</span>
+    <span class="typewriter-emoji" id="typewriter">⌨️</span>
+    <div class="title-wrapper">
+        <span class="title-text" id="titleText">Prompt Builder</span>
+        <span class="cursor" id="cursor"></span>
+    </div>
 </div>
 
 <script>
-    document.getElementById('hammer').addEventListener('click', function() {
-        this.classList.add('hammer-animate');
-        setTimeout(() => {
-            this.classList.remove('hammer-animate');
-        }, 800);
+    const typewriter = document.getElementById('typewriter');
+    const titleText = document.getElementById('titleText');
+    const cursor = document.getElementById('cursor');
+    const fullText = 'Prompt Builder';
+    
+    function playTypingAnimation() {
+        // Показываем курсор
+        cursor.classList.add('blink');
+        
+        // Сброс текста
+        titleText.textContent = '';
+        
+        // Печатаем по буквам
+        let i = 0;
+        const typeInterval = setInterval(() => {
+            if (i < fullText.length) {
+                titleText.textContent += fullText.charAt(i);
+                i++;
+            } else {
+                clearInterval(typeInterval);
+                // Убираем курсор через секунду
+                setTimeout(() => {
+                    cursor.classList.remove('blink');
+                }, 1000);
+            }
+        }, 100);
+    }
+    
+    // Запускаем анимацию при загрузке страницы
+    window.addEventListener('load', () => {
+        setTimeout(playTypingAnimation, 300);
     });
+    
+    // Запускаем анимацию при клике на клавиатуру
+    typewriter.addEventListener('click', playTypingAnimation);
 </script>
 """, height=100)
 
