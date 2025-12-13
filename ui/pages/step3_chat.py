@@ -6,12 +6,12 @@ from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 def render_step3() -> None:
-    """Рендерит шаг 3: Чат-транслятор"""
-    logger.info("Рендер шага 3: Чат-транслятор")
+    """Рендерит шаг 3: Диалог с LLM"""
+    logger.info("Рендер шага 3: Диалог с LLM")
     
     render_step_toggle_button(
         step_number=3,
-        title="Диалог с LLM (Чат-транслятор)",
+        title="Диалог с LLM",
         state_key='show_step3'
     )
     

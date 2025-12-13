@@ -92,7 +92,7 @@ def _render_data_loading_section():
                     st.error(f"Ошибка: {e}")
 
     if "loader" in st.session_state:
-        st.caption(f"Активный контекст в памяти: **{st.session_state.get('current_ns_loaded')}**")
+        st.caption(f"Активный namespace в памяти: **{st.session_state.get('current_ns_loaded')}**")
 
 
 def _render_context_selection_section():
@@ -100,8 +100,6 @@ def _render_context_selection_section():
     loader = st.session_state["loader"]
     all_ds_ids = sorted(list(set(k[2] for k in loader.db['datasets'].keys())))
     all_ent_ids = sorted(list(set(k[2] for k in loader.db['entities'].keys())))
-    
-    st.subheader("🎯 Выбор контекста")
     
     # Инициализация хранилища
     if "stored_datasets" not in st.session_state:
@@ -125,7 +123,7 @@ def _render_context_selection_section():
     
     with col_ent:
         st.multiselect(
-            "🔷 Entities (Доп. сущности)", 
+            "👥 Entities (Сущности)",
             all_ent_ids, 
             placeholder="Выберите сущности...", 
             key="selected_entities",
@@ -289,7 +287,7 @@ def _render_result_tabs_section():
         st.info("Введите запрос и нажмите кнопку 'Сгенерировать' слева.")
         return
 
-    tab_masked, tab_original = st.tabs(["🎭 Замаскированный (Safe)", "👁️ Оригинальный"])
+    tab_masked, tab_original = st.tabs(["🎭 Замаскированный", "📜 Оригинальный"])
     
     token_count = st.session_state.get('token_count', 0)
     
@@ -413,5 +411,5 @@ def _handle_generate_combined():
         st.session_state.masking_dictionary = masker.map_forward.copy()
         st.session_state.enable_masking = len(masker.map_forward) > 0
         
-        st.toast("✅ Промпт успешно сгенерирован!", icon="✅")
+        st.toast("✅ Промпт успешно сгенерирован!")
         st.rerun()

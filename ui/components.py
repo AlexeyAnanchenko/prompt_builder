@@ -203,7 +203,7 @@ def render_sidebar_info() -> None:
     
     if st.session_state.get('current_version'):
         st.sidebar.success(
-            f"🟢 Активная версия: {st.session_state['current_version']}"
+            f"💡 Активная версия: {st.session_state['current_version']}"
         )
 
 
@@ -215,7 +215,7 @@ def render_version_preview(version_name: str, version_data: Dict) -> Optional[st
     
     with col_info:
         is_current = version_name == st.session_state.get('current_version')
-        status = "🟢 Активна" if is_current else ""
+        status = "(💡 активен)" if is_current else ""
         
         st.markdown(f"**{version_name}** {status}")
         st.caption(

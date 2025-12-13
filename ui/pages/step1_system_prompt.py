@@ -132,7 +132,7 @@ def _render_system_prompt_textarea() -> None:
     
     version_label = "📝 Системный промпт"
     if st.session_state.get('current_version'):
-        version_label += f" (🟢 {st.session_state['current_version']})"
+        version_label += f" (💡 {st.session_state['current_version']})"
     
     # --- СИНХРОНИЗАЦИЯ UI <-> DATA ---
     
