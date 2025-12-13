@@ -238,9 +238,6 @@ def _render_user_query_section():
             copy_to_clipboard(text_to_copy, "copy_query_btn")
             st.toast("Текст скопирован!", icon="✅")
     
-    # Небольшой отступ перед кнопкой генерации
-    st.write("")
-    
     # Кнопка генерации внизу
     if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
         _handle_generate_combined()
