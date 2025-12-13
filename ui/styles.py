@@ -73,11 +73,11 @@ def inject_custom_styles() -> None:
           Убираем прозрачность и ставим жесткий белый фон + цвет текста. */
     .stTextArea textarea, 
     .stTextInput input {
-        color: #31333F !important;          /* Нормальный цвет текста (черно-серый) */
-        background-color: #ffffff !important; /* <--- БЫЛО transparent, СТАЛО white */
-        border: none !important;            /* Рамку убираем (её рисует контейнер) */
-        box-shadow: none !important;        /* Тень убираем */
-        caret-color: #5a7fb8 !important;    /* Цвет курсора (каретки) под ваш стиль */
+        color: #31333F !important;
+        background-color: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        caret-color: #5a7fb8 !important;
     }
     
     /* Дополнительно: убираем серый фон при автозаполнении браузером (если есть) */
@@ -89,7 +89,7 @@ def inject_custom_styles() -> None:
     /* 2. Стилизуем КОНТЕЙНЕР (wrapper), который дает рамку. */
     div[data-baseweb="textarea"], 
     div[data-baseweb="input"] {
-        background-color: #ffffff !important; /* Фон контейнера тоже белый */
+        background-color: #ffffff !important;
         border-radius: 10px !important;
         border: 2px solid #dee2e6 !important;
         transition: all 0.3s ease !important;
@@ -111,15 +111,44 @@ def inject_custom_styles() -> None:
         background: white !important;
     }
     
-    /* === MULTISELECT === */
-    .stMultiSelect > div > div {
+    /* ================================================================= */
+    /* !!! ИСПРАВЛЕНИЕ MULTISELECT (убираем красные и двойные рамки) !!! */
+    /* ================================================================= */
+    
+    /* ВНЕШНИЙ контейнер - убираем его рамку полностью */
+    .stMultiSelect > div {
+        border: none !important;
+        background: transparent !important;
+    }
+    
+    /* ВНУТРЕННИЙ контейнер - здесь рисуем единственную рамку */
+    .stMultiSelect > div > div,
+    div[data-baseweb="select"] > div {
         border-radius: 10px !important;
         border: 2px solid #dee2e6 !important;
         background: white !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* Красим рамку мультиселекта при фокусе */
-    .stMultiSelect > div > div:focus-within {
+    /* КРИТИЧНО: Переопределяем все возможные состояния error/invalid */
+    .stMultiSelect > div > div[aria-invalid="true"],
+    .stMultiSelect > div > div[data-invalid="true"],
+    div[data-baseweb="select"][aria-invalid="true"] > div,
+    div[data-baseweb="select"][data-invalid="true"] > div {
+        border-color: #dee2e6 !important;
+        box-shadow: none !important;
+    }
+    
+    /* При фокусе - только синяя рамка */
+    .stMultiSelect > div > div:focus-within,
+    div[data-baseweb="select"]:focus-within > div {
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
+    }
+    
+    /* Даже если есть invalid + focus - только синий */
+    .stMultiSelect > div > div[aria-invalid="true"]:focus-within,
+    div[data-baseweb="select"][aria-invalid="true"]:focus-within > div {
         border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
     }
@@ -129,6 +158,20 @@ def inject_custom_styles() -> None:
         background-color: #5a7fb8 !important;
         color: white !important;
     }
+    
+    /* Убираем border у внутренних элементов */
+    .stMultiSelect [role="button"],
+    .stMultiSelect [role="combobox"] {
+        border: none !important;
+        outline: none !important;
+    }
+    
+    /* Убираем все дополнительные рамки у вложенных div */
+    .stMultiSelect > div > div > div {
+        border: none !important;
+    }
+    
+    /* ================================================================= */
     
     /* === ЧЕКБОКСЫ === */
     .stCheckbox {
