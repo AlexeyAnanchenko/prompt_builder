@@ -33,7 +33,7 @@ def inject_custom_styles() -> None:
     button[kind="secondary"],
     .stButton button,
     button[data-testid*="stBaseButton"] {
-        transition: all 0.2s ease !important;
+        transition: all 0.3s ease !important;  /* ← ИЗМЕНЕНО с 0.2s на 0.3s */
     }
     
     /* ГЛАВНОЕ ПРАВИЛО: Синяя рамка при наведении на ВСЕ кнопки */
@@ -51,21 +51,21 @@ def inject_custom_styles() -> None:
     button[kind="primary"] {
         background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
         color: white !important;
-        border: 2px solid transparent !important; /* Прозрачная рамка, чтобы не было дёрганья */
+        border: 2px solid transparent !important;
         padding: 15px 20px !important;
         border-radius: 12px !important;
         font-size: 1.1em !important;
         font-weight: 600 !important;
         box-shadow: 0 3px 12px rgba(90, 127, 184, 0.2) !important;
         margin: 20px 0 15px 0 !important;
-        transition: all 0.2s ease !important;
+        transition: all 0.3s ease !important;  /* ← Явно указываем для уверенности */
     }
     
     button[kind="primary"]:hover:not(:disabled) {
         background: linear-gradient(135deg, #4a6fa0 0%, #5a7fb8 100%) !important;
-        border-color: #5a7fb8 !important; /* Проявляем рамку */
+        border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
-        transform: translateY(-1px) !important; /* Лёгкое приподнимание */
+        transform: translateY(-1px) !important;
     }
     
     /* === КНОПКИ ДЕЙСТВИЙ (Зеленые) === */
@@ -76,22 +76,29 @@ def inject_custom_styles() -> None:
         padding: 0.6rem 1.2rem !important;
         border-radius: 10px !important;
         box-shadow: 0 2px 10px rgba(53, 168, 91, 0.25) !important;
+        border: 2px solid transparent !important;  /* ← ДОБАВЛЕНО */
+        transition: all 0.3s ease !important;  /* ← ДОБАВЛЕНО */
     }
     
     .stColumn button[kind="primary"]:hover:not(:disabled) {
         background: #298146 !important;
-        /* Синяя рамка уже добавлена выше */
+        border-color: #5a7fb8 !important;  /* ← ДОБАВЛЕНО явно */
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;  /* ← ДОБАВЛЕНО явно */
     }
     
     /* === ВТОРИЧНЫЕ КНОПКИ === */
     button[kind="secondary"] {
         background: #f8f9fa !important;
         color: #495057 !important;
-        border: 1.5px solid #adb5bd !important;
+        border: 2px solid #dee2e6 !important;  /* ← Светлая рамка как у других элементов */
         border-radius: 8px !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* При наведении на вторичные кнопки - синяя рамка добавлена выше */
+    button[kind="secondary"]:hover:not(:disabled) {
+        border-color: #5a7fb8 !important;  /* ← ДОБАВЛЕНО явно */
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;  /* ← ДОБАВЛЕНО явно */
+    }
 
     /* ================================================================= */
     /* !!! ВАЖНОЕ ИСПРАВЛЕНИЕ РАМОК (INPUTS & TEXTAREAS) !!!             */
