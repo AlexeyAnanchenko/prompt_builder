@@ -200,5 +200,35 @@ def inject_custom_styles() -> None:
     @keyframes fadeOut {
         to { opacity: 0; display: none; }
     }
+    
+    /* ================================================================= */
+    /* === УМЕНЬШЕНИЕ ШРИФТА В БЛОКАХ КОДА (ПРОМПТЫ) === */
+    /* ================================================================= */
+    
+    /* Перебиваем emotion-классы Streamlit */
+    [class*="st-emotion-cache"] pre,
+    [class*="st-emotion-cache"] code {
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+    }
+    
+    /* Более специфичный селектор для кода */
+    div[class*="st-emotion-cache"] code[class*="language-"] {
+        font-size: 12px !important;
+    }
+    
+    /* Контейнер pre с кодом */
+    pre[class*="st-emotion-cache"] {
+        font-size: 12px !important;
+    }
+    
+    /* Дополнительно: для всех блоков кода */
+    .stCodeBlock pre code,
+    .stCodeBlock pre,
+    div[data-testid="stCodeBlock"] pre,
+    div[data-testid="stCodeBlock"] code {
+        font-size: 15px !important;
+        line-height: 1.5 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
