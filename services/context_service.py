@@ -8,7 +8,11 @@ from utils.tokenizer import TokenCounter
 logger = setup_logger(__name__)
 
 class ContextService:
-    """Сервис для оркестрации подбора контекста и генерации промптов"""
+    """
+    Сервисный слой.
+    Оркестрирует работу компонентов Core (Loader, Resolver, Masker, Generator).
+    Вызывается напрямую из UI (Step 2).
+    """
 
     @staticmethod
     def pick_context(
@@ -18,14 +22,24 @@ class ContextService:
         entities: List[str]
     ) -> Tuple[str, Dict[Any, Any]]:
         """
-        Подбирает контекст и возвращает замаскированный SQL и словарь масок.
-        """
-        logger.info(f"Подбор контекста для {len(datasets)} datasets и {len(entities)} entities")
+        Только подбирает контекст и маскирует его (без генерации полного промпта).
+        Используется для кнопки "Подобрать контекст" в UI.
         
-        # 1. Сброс маскера
+        Args:
+            loader: Загрузчик данных БД.
+            masker: Объект маскера.
+            datasets: Список ID выбранных датасетов.
+            entities: Список ID выбранных сущностей.
+            
+        Returns:
+            Tuple[str, Dict]: (SQL-текст, Словарь масок)
+        """
+        logger.info(f"Запуск подбора контекста: Datasets={len(datasets)}, Entities={len(entities)}")
+        
+        # 1. Сбрасываем состояние маскера (начинаем нумерацию ENT_1 заново)
         masker.clear()
         
-        # 2. Резолвинг зависимостей
+        # 2. Резолвинг зависимостей (строим граф объектов)
         resolver = ContextResolver(loader)
         for ds in datasets:
             resolver.resolve_by_dataset(ds)
@@ -33,11 +47,13 @@ class ContextService:
             resolver.resolve_by_entity(ent)
         
         # 3. Генерация SQL с маскированием
-        # Примечание: OutputGenerator заполняет masker внутри generate_sql
+        # OutputGenerator будет вызывать masker.register() для каждого поля
         gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
         sql_masked = gen_masked.generate_sql()
         
-        # Возвращаем SQL и копию словаря масок
+        logger.info(f"Контекст подобран. Размер SQL: {len(sql_masked)} символов.")
+        
+        # Возвращаем SQL и копию словаря масок (чтобы UI мог его отобразить)
         return sql_masked, masker.map_forward.copy()
 
     @staticmethod
@@ -51,33 +67,32 @@ class ContextService:
         user_query: str
     ) -> Dict[str, Any]:
         """
-        Генерирует финальные промпты (маскированный и оригинальный).
+        Генерирует два варианта промптов: Маскированный (для LLM) и Оригинальный (для проверки).
+        Используется для кнопки "Сгенерировать промпт".
         """
-        logger.info("Начало генерации финальных промптов")
+        logger.info("Начало полной генерации промптов")
         
-        # 1. Повторный резолвинг (чтобы гарантировать чистоту для orig и masked генерации)
-        # В идеале можно передать resolver извне, но ContextService stateless
+        # 1. Резолвинг (строим контекст заново для надежности)
         resolver = ContextResolver(loader)
         if datasets or entities:
             for ds in datasets: resolver.resolve_by_dataset(ds)
             for ent in entities: resolver.resolve_by_entity(ent)
         
-        # 2. Генерация Маскированного SQL (заполняет masker)
-        # Важно: если masker не был очищен до этого, он продолжит нумерацию. 
-        # В рамках этого флоу предполагается, что он уже содержит нужные маски, 
-        # или мы их обновляем.
+        # 2. Генерация МАСКИРОВАННОГО SQL
+        # Предполагаем, что masker уже содержит нужные маски (после pick_context),
+        # либо наполняем его сейчас.
         gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
         sql_masked = gen_masked.generate_sql()
         
-        # 3. Генерация Оригинального SQL
+        # 3. Генерация ОРИГИНАЛЬНОГО SQL (передаем masker=None)
         gen_orig = OutputGenerator(loader, resolver.context, masker=None)
         sql_original = gen_orig.generate_sql()
         
-        # 4. Маскирование текстовых инпутов
+        # 4. Маскирование текстовых полей (System Prompt и User Query)
         system_prompt_masked = masker.mask_text(system_prompt)
         user_query_masked = masker.mask_text(user_query)
         
-        # 5. Сборка промптов
+        # 5. Сборка финальных текстов
         generator = PromptGenerator()
         
         final_prompt_masked = generator.generate(
@@ -94,7 +109,7 @@ class ContextService:
             sql_context=sql_original
         )
         
-        # 6. Подсчет токенов
+        # 6. Подсчет токенов (для маскированного промпта)
         try:
             token_count = TokenCounter.count_tokens(final_prompt_masked)
         except Exception as e:
