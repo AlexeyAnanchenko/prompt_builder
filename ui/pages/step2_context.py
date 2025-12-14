@@ -3,13 +3,12 @@ from ui.components import (
     render_step_toggle_button,
     render_token_counter
 )
-from core.prompt_generator import PromptGenerator
-from core.context_engine import DbDataLoader, ContextResolver, OutputGenerator
+from core.context_engine import DbDataLoader
 from core.masking import ContextMasker
 from services.database import DatabaseManager
+from services.context_service import ContextService
 from config.settings import MESSAGES, TEXTAREA_HEIGHTS, MAX_TOKENS
 from utils.logger import setup_logger
-from utils.tokenizer import TokenCounter
 from utils.helpers import copy_to_clipboard
 
 logger = setup_logger(__name__)
@@ -107,7 +106,6 @@ def _render_context_selection_section():
     if "stored_entities" not in st.session_state:
         st.session_state["stored_entities"] = []
     
-    # НОВОЕ: Три колонки - datasets, entities, кнопка подбора
     col_ds, col_ent, col_btn = st.columns([5, 5, 2])
     
     with col_ds:
@@ -133,7 +131,6 @@ def _render_context_selection_section():
         )
     
     with col_btn:
-        # Добавляем отступ сверху для выравнивания с мультиселектами
         st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
         
         if st.button(
@@ -146,7 +143,7 @@ def _render_context_selection_section():
 
 
 def _handle_context_pickup():
-    """Обработчик кнопки 'Подобрать контекст' - генерирует SQL и создаёт словарь масок"""
+    """Обработчик кнопки 'Подобрать контекст'"""
     
     if "loader" not in st.session_state:
         st.error("Данные не загружены.")
@@ -154,11 +151,6 @@ def _handle_context_pickup():
     
     loader = st.session_state["loader"]
     masker = st.session_state["masker"]
-    
-    # Очищаем предыдущий словарь масок
-    masker.clear()
-    
-    # Читаем выбранные датасеты и сущности
     datasets = st.session_state.get("selected_datasets", [])
     entities = st.session_state.get("selected_entities", [])
     
@@ -168,29 +160,19 @@ def _handle_context_pickup():
     
     with st.spinner("Анализ графа, генерация контекста и построение словаря масок..."):
         try:
-            # Резолвим контекст
-            resolver = ContextResolver(loader)
-            for ds in datasets:
-                resolver.resolve_by_dataset(ds)
-            for ent in entities:
-                resolver.resolve_by_entity(ent)
+            # Используем сервис для логики
+            sql_masked, mask_map = ContextService.pick_context(
+                loader, masker, datasets, entities
+            )
             
-            # Генерируем SQL с маскированием
-            gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
-            sql_masked = gen_masked.generate_sql()
-            
-            # Сохраняем результаты в session_state
+            # Сохраняем результаты
             st.session_state.context_sql_masked = sql_masked
-            st.session_state.masking_dictionary = masker.map_forward.copy()
-            st.session_state.enable_masking = len(masker.map_forward) > 0
+            st.session_state.masking_dictionary = mask_map
+            st.session_state.enable_masking = len(mask_map) > 0
             
-            # Информируем пользователя
-            mask_count = len(masker.map_forward)
-            st.toast(f"✅ Контекст подобран! Создано масок: {mask_count}")
+            st.toast(f"✅ Контекст подобран! Создано масок: {len(mask_map)}")
+            logger.info(f"Контекст подобран: {len(mask_map)} элементов замаскировано")
             
-            logger.info(f"Контекст подобран: {mask_count} элементов замаскировано")
-            
-            # ВАЖНО: Перерисовываем интерфейс, чтобы показать словарь
             st.rerun()
             
         except Exception as e:
@@ -200,11 +182,8 @@ def _handle_context_pickup():
 
 def _render_user_query_section():
     """Рендеринг секции пользовательского запроса"""
-    
-    # Заголовок
     st.subheader("💬 Мой запрос")
     
-    # Текстовое поле
     st.text_area(
         "Введите ваш запрос", 
         height=TEXTAREA_HEIGHTS["user_query"], 
@@ -213,7 +192,6 @@ def _render_user_query_section():
         label_visibility="collapsed"
     )
     
-    # НОВОЕ: Кнопки Очистить/Копировать НИЖЕ текстового поля, но ВЫШЕ кнопки генерации
     col_clear, col_copy = st.columns([1, 1])
     
     with col_clear:
@@ -238,7 +216,6 @@ def _render_user_query_section():
             copy_to_clipboard(text_to_copy, "copy_query_btn")
             st.toast("Текст скопирован!", icon="✅")
     
-    # Кнопка генерации внизу
     if st.button("🚀 Сгенерировать промпт", key="btn_generate_final_prompt", use_container_width=True):
         _handle_generate_combined()
 
@@ -246,38 +223,11 @@ def _render_user_query_section():
 def _render_result_tabs_section():
     st.subheader("✨ Результат")
     
-    # НОВОЕ: Показываем словарь замен, если он уже создан (после "Подобрать контекст")
     masker = st.session_state.get("masker")
     if masker and masker.map_forward and not st.session_state.get('final_prompt_masked'):
         with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=True):
             st.caption("✨ Контекст подобран! Используйте эти названия в вашем запросе.")
-            
-            def natural_sort_key(item):
-                mask_val = item[1]
-                try:
-                    prefix, num = mask_val.rsplit('_', 1)
-                    return (prefix, int(num))
-                except ValueError:
-                    return (mask_val, 0)
-
-            sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
-            
-            df_data = [
-                {"Category": k[0], "Real Name": k[1], "Mask": v} 
-                for k, v in sorted_items
-            ]
-            
-            st.dataframe(
-                df_data, 
-                height=400, 
-                width='stretch',
-                hide_index=True,
-                column_config={
-                    "Category": st.column_config.TextColumn("Категория", width="small"),
-                    "Real Name": st.column_config.TextColumn("Реальное имя"),
-                    "Mask": st.column_config.TextColumn("Маска", width="small"),
-                }
-            )
+            _render_masking_dictionary(masker.map_forward)
         return
     
     if not st.session_state.get('final_prompt_masked'):
@@ -287,14 +237,10 @@ def _render_result_tabs_section():
     tab_masked, tab_original = st.tabs(["🎭 Замаскированный", "📜 Оригинальный"])
     
     token_count = st.session_state.get('token_count', 0)
-    
-    # Высота прокручиваемой области в пикселях
     SCROLL_HEIGHT = 500
     
-    # --- TAB 1: MASKED ---
     with tab_masked:
         masked_text = st.session_state.final_prompt_masked
-        
         render_token_counter(token_count, MAX_TOKENS)
         st.caption("Этот текст безопасен для отправки в публичную LLM.")
 
@@ -304,38 +250,10 @@ def _render_result_tabs_section():
         
         if masker and masker.map_forward:
             with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
-                
-                def natural_sort_key(item):
-                    mask_val = item[1]
-                    try:
-                        prefix, num = mask_val.rsplit('_', 1)
-                        return (prefix, int(num))
-                    except ValueError:
-                        return (mask_val, 0)
+                _render_masking_dictionary(masker.map_forward)
 
-                sorted_items = sorted(masker.map_forward.items(), key=natural_sort_key)
-                
-                df_data = [
-                    {"Category": k[0], "Real Name": k[1], "Mask": v} 
-                    for k, v in sorted_items
-                ]
-                
-                st.dataframe(
-                    df_data, 
-                    height=400, 
-                    width='stretch',
-                    hide_index=True,
-                    column_config={
-                        "Category": st.column_config.TextColumn("Категория", width="small"),
-                        "Real Name": st.column_config.TextColumn("Реальное имя"),
-                        "Mask": st.column_config.TextColumn("Маска", width="small"),
-                    }
-                )
-
-    # --- TAB 2: ORIGINAL ---
     with tab_original:
         orig_text = st.session_state.final_prompt_original
-        
         render_token_counter(token_count, MAX_TOKENS)
         st.caption("Внимание! Содержит реальные названия полей и конфигураций.")
         
@@ -343,70 +261,64 @@ def _render_result_tabs_section():
             with st.container(height=SCROLL_HEIGHT):
                 st.code(orig_text, language="sql", line_numbers=True)
 
+def _render_masking_dictionary(mask_map):
+    """Вспомогательная функция для отрисовки таблицы масок"""
+    def natural_sort_key(item):
+        mask_val = item[1]
+        try:
+            prefix, num = mask_val.rsplit('_', 1)
+            return (prefix, int(num))
+        except ValueError:
+            return (mask_val, 0)
+
+    sorted_items = sorted(mask_map.items(), key=natural_sort_key)
+    
+    df_data = [
+        {"Category": k[0], "Real Name": k[1], "Mask": v} 
+        for k, v in sorted_items
+    ]
+    
+    st.dataframe(
+        df_data, 
+        height=400, 
+        width='stretch',
+        hide_index=True,
+        column_config={
+            "Category": st.column_config.TextColumn("Категория", width="small"),
+            "Real Name": st.column_config.TextColumn("Реальное имя"),
+            "Mask": st.column_config.TextColumn("Маска", width="small"),
+        }
+    )
 
 def _handle_generate_combined():
     """Обработчик генерации финального промпта"""
-
-    ns_id = st.session_state.selected_namespace.split(' ')[0]
-    masker = st.session_state["masker"]
-    
     if "loader" not in st.session_state:
         st.error("Данные не загружены.")
         return
 
+    ns_id = st.session_state.selected_namespace.split(' ')[0]
+    masker = st.session_state["masker"]
     loader = st.session_state["loader"]
     
     datasets = st.session_state.get("selected_datasets", [])
     entities = st.session_state.get("selected_entities", [])
-    
-    system_prompt_orig = st.session_state.get('system_prompt', '')
-    user_query_orig = st.session_state.get('user_query', '')
+    system_prompt = st.session_state.get('system_prompt', '')
+    user_query = st.session_state.get('user_query', '')
     
     with st.spinner("Анализ графа, генерация SQL и маскирование..."):
-        resolver = ContextResolver(loader)
-        if datasets or entities:
-            for ds in datasets: resolver.resolve_by_dataset(ds)
-            for ent in entities: resolver.resolve_by_entity(ent)
-        
-        gen_masked = OutputGenerator(loader, resolver.context, masker=masker)
-        sql_masked = gen_masked.generate_sql()
-        
-        gen_orig = OutputGenerator(loader, resolver.context, masker=None)
-        sql_original = gen_orig.generate_sql()
-        
-        system_prompt_masked = masker.mask_text(system_prompt_orig)
-        user_query_masked = masker.mask_text(user_query_orig)
-        
-        generator = PromptGenerator()
-        
-        final_prompt_masked = generator.generate(
-            system_prompt=system_prompt_masked,
-            user_query=user_query_masked,
-            namespace=ns_id,
-            sql_context=sql_masked
+        # Используем сервис
+        result = ContextService.generate_final_prompts(
+            loader, masker, ns_id, datasets, entities, system_prompt, user_query
         )
         
-        final_prompt_original = generator.generate(
-            system_prompt=system_prompt_orig,
-            user_query=user_query_orig,
-            namespace=ns_id,
-            sql_context=sql_original
-        )
+        # Обновляем session_state
+        st.session_state.final_prompt_masked = result["final_prompt_masked"]
+        st.session_state.final_prompt_original = result["final_prompt_original"]
+        st.session_state.generated_sql_context = result["sql_original"]
+        st.session_state.token_count = result["token_count"]
+        st.session_state.masking_dictionary = result["masking_dict"]
+        st.session_state.enable_masking = len(result["masking_dict"]) > 0
         
-        st.session_state.final_prompt_masked = final_prompt_masked
-        st.session_state.final_prompt_original = final_prompt_original
-        st.session_state.generated_sql_context = sql_original
-        
-        try:
-            token_count = TokenCounter.count_tokens(final_prompt_masked)
-            st.session_state.token_count = token_count
-            logger.info(f"Токенов в промпте: {token_count}")
-        except Exception as e:
-            logger.error(f"Ошибка подсчета токенов: {e}")
-            st.session_state.token_count = 0
-        
-        st.session_state.masking_dictionary = masker.map_forward.copy()
-        st.session_state.enable_masking = len(masker.map_forward) > 0
-        
+        logger.info(f"Токенов в промпте: {result['token_count']}")
         st.toast("✅ Промпт успешно сгенерирован!")
         st.rerun()
