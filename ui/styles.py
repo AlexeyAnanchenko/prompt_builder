@@ -1,42 +1,57 @@
 import streamlit as st
 from utils.logger import setup_logger
 
-
-# Настраиваем логгер для модуля
+# Настраиваем логгер для модуля стилей
 logger = setup_logger(__name__)
 
-
 def inject_custom_styles() -> None:
-    """Применяет все кастомные CSS стили для приложения"""
+    """
+    Применяет все кастомные CSS стили для приложения.
+    Использует st.markdown c unsafe_allow_html=True для инъекции стилей в <head>.
+    
+    Содержит настройки:
+    - Фона приложения
+    - Кнопок (обычных, primary и внутри колонок)
+    - Полей ввода (Input, Textarea)
+    - Мультиселектов (исправление рамок)
+    - Экспандеров и блоков кода
+    """
     logger.info("Применение кастомных CSS стилей")
+    
     st.markdown("""
 <style>
-    /* === ОБЩИЙ ФОН И БАЗОВЫЕ НАСТРОЙКИ === */
+    /* ================================================================= */
+    /* 1. ГЛОБАЛЬНЫЕ НАСТРОЙКИ (ФОН, ОТСТУПЫ)                            */
+    /* ================================================================= */
+    
+    /* Градиентный фон всего приложения */
     .stApp {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     }
     
+    /* Уменьшение отступов в колонках для компактности */
     div[data-testid="column"] {
         padding: 0 5px !important;
     }
     
+    /* Растягивание кнопок на всю ширину контейнера */
     .stButton button {
         width: 100%;
     }
     
     /* ================================================================= */
-    /* === УНИВЕРСАЛЬНАЯ СТИЛИЗАЦИЯ ВСЕХ КНОПОК ПРИ НАВЕДЕНИИ ===        */
+    /* 2. АНИМАЦИИ И НАВЕДЕНИЕ (ВСЕ КНОПКИ)                              */
     /* ================================================================= */
     
-    /* Базовая стилизация для всех кнопок */
+    /* Базовая анимация переходов для всех типов кнопок */
     button[kind="primary"],
     button[kind="secondary"],
     .stButton button,
     button[data-testid*="stBaseButton"] {
-        transition: all 0.3s ease !important;  /* ← ИЗМЕНЕНО с 0.2s на 0.3s */
+        transition: all 0.3s ease !important;
     }
     
-    /* ГЛАВНОЕ ПРАВИЛО: Синяя рамка при наведении на ВСЕ кнопки */
+    /* Эффект наведения: синяя рамка и легкое свечение */
     button[kind="primary"]:hover:not(:disabled),
     button[kind="secondary"]:hover:not(:disabled),
     .stButton button:hover:not(:disabled),
@@ -46,8 +61,10 @@ def inject_custom_styles() -> None:
     }
     
     /* ================================================================= */
+    /* 3. СТИЛИ КНОПОК ПО ТИПАМ                                          */
+    /* ================================================================= */
     
-    /* === КНОПКИ ЭТАПОВ (1️⃣, 2️⃣, 3️⃣) === */
+    /* PRIMARY (Основные синие кнопки этапов 1, 2, 3) */
     button[kind="primary"] {
         background: linear-gradient(135deg, #5a7fb8 0%, #4a6fa0 100%) !important;
         color: white !important;
@@ -58,7 +75,7 @@ def inject_custom_styles() -> None:
         font-weight: 600 !important;
         box-shadow: 0 3px 12px rgba(90, 127, 184, 0.2) !important;
         margin: 20px 0 15px 0 !important;
-        transition: all 0.3s ease !important;  /* ← Явно указываем для уверенности */
+        transition: all 0.3s ease !important;
     }
     
     button[kind="primary"]:hover:not(:disabled) {
@@ -68,7 +85,7 @@ def inject_custom_styles() -> None:
         transform: translateY(-1px) !important;
     }
     
-    /* === КНОПКИ ДЕЙСТВИЙ (Зеленые) === */
+    /* ACTION BUTTONS (Зеленые кнопки действий внутри колонок) */
     .stColumn button[kind="primary"],
     .stColumn .stButton button[kind="primary"] {
         background: #35a85b !important;
@@ -76,36 +93,35 @@ def inject_custom_styles() -> None:
         padding: 0.6rem 1.2rem !important;
         border-radius: 10px !important;
         box-shadow: 0 2px 10px rgba(53, 168, 91, 0.25) !important;
-        border: 2px solid transparent !important;  /* ← ДОБАВЛЕНО */
-        transition: all 0.3s ease !important;  /* ← ДОБАВЛЕНО */
+        border: 2px solid transparent !important;
+        transition: all 0.3s ease !important;
     }
     
     .stColumn button[kind="primary"]:hover:not(:disabled) {
         background: #298146 !important;
-        border-color: #5a7fb8 !important;  /* ← ДОБАВЛЕНО явно */
-        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;  /* ← ДОБАВЛЕНО явно */
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
     }
     
-    /* === ВТОРИЧНЫЕ КНОПКИ === */
+    /* SECONDARY (Второстепенные светлые кнопки) */
     button[kind="secondary"] {
         background: #f8f9fa !important;
         color: #495057 !important;
-        border: 2px solid #dee2e6 !important;  /* ← Светлая рамка как у других элементов */
+        border: 2px solid #dee2e6 !important;
         border-radius: 8px !important;
         transition: all 0.3s ease !important;
     }
     
     button[kind="secondary"]:hover:not(:disabled) {
-        border-color: #5a7fb8 !important;  /* ← ДОБАВЛЕНО явно */
-        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;  /* ← ДОБАВЛЕНО явно */
+        border-color: #5a7fb8 !important;
+        box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.15) !important;
     }
 
     /* ================================================================= */
-    /* !!! ВАЖНОЕ ИСПРАВЛЕНИЕ РАМОК (INPUTS & TEXTAREAS) !!!             */
+    /* 4. ПОЛЯ ВВОДА (INPUTS & TEXTAREAS)                                */
     /* ================================================================= */
 
-    /* 1. Стилизуем САМО ПОЛЕ ВВОДА (где курсор). 
-          Убираем прозрачность и ставим жесткий белый фон + цвет текста. */
+    /* Само поле ввода (текст, фон, каретка) */
     .stTextArea textarea, 
     .stTextInput input {
         color: #31333F !important;
@@ -115,13 +131,13 @@ def inject_custom_styles() -> None:
         caret-color: #5a7fb8 !important;
     }
     
-    /* Дополнительно: убираем серый фон при автозаполнении браузером (если есть) */
+    /* Убираем серый фон автозаполнения браузера */
     .stTextArea textarea:-webkit-autofill,
     .stTextInput input:-webkit-autofill {
         -webkit-box-shadow: 0 0 0 30px white inset !important;
     }
 
-    /* 2. Стилизуем КОНТЕЙНЕР (wrapper), который дает рамку. */
+    /* Контейнер поля (рисует рамку) */
     div[data-baseweb="textarea"], 
     div[data-baseweb="input"] {
         background-color: #ffffff !important;
@@ -130,7 +146,7 @@ def inject_custom_styles() -> None:
         transition: all 0.3s ease !important;
     }
 
-    /* 3. Красим КОНТЕЙНЕР при фокусе (синяя рамка) */
+    /* Состояние фокуса (синяя рамка) */
     div[data-baseweb="textarea"]:focus-within, 
     div[data-baseweb="input"]:focus-within {
         border-color: #5a7fb8 !important; 
@@ -138,8 +154,9 @@ def inject_custom_styles() -> None:
     }
 
     /* ================================================================= */
-
-    /* === СЕЛЕКТЫ (Dropdowns) === */
+    /* 5. ВЫПАДАЮЩИЕ СПИСКИ (SELECTBOX)                                  */
+    /* ================================================================= */
+    
     .stSelectbox > div > div {
         border-radius: 10px !important;
         border: 2px solid #dee2e6 !important;
@@ -147,16 +164,16 @@ def inject_custom_styles() -> None:
     }
     
     /* ================================================================= */
-    /* !!! ИСПРАВЛЕНИЕ MULTISELECT (убираем красные и двойные рамки) !!! */
+    /* 6. МУЛЬТИСЕЛЕКТЫ (MULTISELECT) - FIX                              */
     /* ================================================================= */
     
-    /* ВНЕШНИЙ контейнер - убираем его рамку полностью */
+    /* Убираем внешнюю рамку контейнера (fix двойных границ) */
     .stMultiSelect > div {
         border: none !important;
         background: transparent !important;
     }
     
-    /* ВНУТРЕННИЙ контейнер - здесь рисуем единственную рамку */
+    /* Стилизуем внутренний контейнер */
     .stMultiSelect > div > div,
     div[data-baseweb="select"] > div {
         border-radius: 10px !important;
@@ -165,7 +182,7 @@ def inject_custom_styles() -> None:
         transition: all 0.3s ease !important;
     }
     
-    /* КРИТИЧНО: Переопределяем все возможные состояния error/invalid */
+    /* Исправление отображения состояний ошибки/валидации */
     .stMultiSelect > div > div[aria-invalid="true"],
     .stMultiSelect > div > div[data-invalid="true"],
     div[data-baseweb="select"][aria-invalid="true"] > div,
@@ -174,41 +191,41 @@ def inject_custom_styles() -> None:
         box-shadow: none !important;
     }
     
-    /* При фокусе - только синяя рамка */
+    /* Фокус на мультиселекте */
     .stMultiSelect > div > div:focus-within,
     div[data-baseweb="select"]:focus-within > div {
         border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
     }
     
-    /* Даже если есть invalid + focus - только синий */
+    /* Фокус даже при состоянии invalid */
     .stMultiSelect > div > div[aria-invalid="true"]:focus-within,
     div[data-baseweb="select"][aria-invalid="true"]:focus-within > div {
         border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 3px rgba(90, 127, 184, 0.1) !important;
     }
 
-    /* Теги внутри мультиселекта */
+    /* Теги выбранных элементов (синий фон) */
     .stMultiSelect span[data-baseweb="tag"] {
         background-color: #5a7fb8 !important;
         color: white !important;
     }
     
-    /* Убираем border у внутренних элементов */
+    /* Уборка лишних границ внутри */
     .stMultiSelect [role="button"],
     .stMultiSelect [role="combobox"] {
         border: none !important;
         outline: none !important;
     }
     
-    /* Убираем все дополнительные рамки у вложенных div */
     .stMultiSelect > div > div > div {
         border: none !important;
     }
     
     /* ================================================================= */
+    /* 7. ЧЕКБОКСЫ И ПРОЧЕЕ                                              */
+    /* ================================================================= */
     
-    /* === ЧЕКБОКСЫ === */
     .stCheckbox {
         background: white;
         padding: 10px 15px;
@@ -217,10 +234,10 @@ def inject_custom_styles() -> None:
     }
     
     /* ================================================================= */
-    /* === СТИЛИЗАЦИЯ EXPANDER-ОВ === */
+    /* 8. EXPANDER (РАСКРЫВАЮЩИЕСЯ БЛОКИ)                                */
     /* ================================================================= */
     
-    /* Основной контейнер expander-а */
+    /* Контейнер */
     div[data-testid="stExpander"] {
         background: #ffffff !important;
         border: 1px solid #dee2e6 !important;
@@ -230,13 +247,12 @@ def inject_custom_styles() -> None:
         transition: all 0.2s ease !important;
     }
     
-    /* При наведении на весь expander */
     div[data-testid="stExpander"]:hover {
         border-color: #5a7fb8 !important;
         box-shadow: 0 0 0 2px rgba(90, 127, 184, 0.1) !important;
     }
     
-    /* Заголовок expander-а */
+    /* Заголовок (Summary) */
     div[data-testid="stExpander"] details summary {
         background: #f8f9fa !important;
         border-radius: 6px !important;
@@ -247,33 +263,36 @@ def inject_custom_styles() -> None:
         font-size: 0.9em !important;
     }
     
-    /* При наведении на заголовок */
     div[data-testid="stExpander"] details summary:hover {
         background: #e9ecef !important;
     }
     
-    /* Содержимое expander-а */
+    /* Открытое состояние */
     div[data-testid="stExpander"] details[open] {
         background: #ffffff !important;
     }
     
-    /* Стрелка раскрытия */
+    /* Стрелка иконки */
     div[data-testid="stExpander"] details summary svg {
         stroke: #5a7fb8 !important;
         stroke-width: 1.8 !important;
     }
     
-    /* === МЕТРИКИ И ТЕКСТ === */
+    /* ================================================================= */
+    /* 9. УТИЛИТЫ И АНИМАЦИИ                                             */
+    /* ================================================================= */
+    
+    /* Цвет цифр в метриках */
     [data-testid="stMetricValue"] {
         color: #5a7fb8 !important;
     }
     
-    /* Глобально убираем outline (синюю обводку браузера) */
+    /* Убираем синюю обводку браузера при фокусе (outline) */
     *:focus-visible {
         outline: none !important;
     }
     
-    /* Анимация успеха */
+    /* Анимация исчезновения сообщения об успехе (Toast/Success) */
     .stSuccess {
         animation: fadeOut 3s ease-in-out forwards;
         animation-delay: 2s;
@@ -284,27 +303,24 @@ def inject_custom_styles() -> None:
     }
     
     /* ================================================================= */
-    /* === УМЕНЬШЕНИЕ ШРИФТА В БЛОКАХ КОДА (ПРОМПТЫ) === */
+    /* 10. БЛОКИ КОДА (ШРИФТЫ)                                           */
     /* ================================================================= */
     
-    /* Перебиваем emotion-классы Streamlit */
+    /* Принудительное уменьшение шрифта для компактности промптов */
     [class*="st-emotion-cache"] pre,
     [class*="st-emotion-cache"] code {
         font-size: 12px !important;
         line-height: 1.5 !important;
     }
     
-    /* Более специфичный селектор для кода */
     div[class*="st-emotion-cache"] code[class*="language-"] {
         font-size: 12px !important;
     }
     
-    /* Контейнер pre с кодом */
     pre[class*="st-emotion-cache"] {
         font-size: 12px !important;
     }
     
-    /* Дополнительно: для всех блоков кода */
     .stCodeBlock pre code,
     .stCodeBlock pre,
     div[data-testid="stCodeBlock"] pre,
