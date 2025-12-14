@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)

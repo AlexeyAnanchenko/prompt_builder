@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 from utils.logger import setup_logger
 
 # Пытаемся импортировать библиотеку для Rust-токенизации.
