@@ -17,7 +17,7 @@ class DatabaseManager:
     _connection_pool: Optional[pool.SimpleConnectionPool] = None
 
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Инициализация менеджера БД"""
 
         logger.info("DatabaseManager инициализирован")
@@ -25,7 +25,7 @@ class DatabaseManager:
             self._init_connection_pool()
 
 
-    def _init_connection_pool(self):
+    def _init_connection_pool(self) -> None:
         """Создает пул соединений с БД"""
 
         try:
@@ -169,7 +169,7 @@ class DatabaseManager:
             raise e
     
 
-    def close_all_connections(self):
+    def close_all_connections(self) -> None:
         """Закрывает все соединения в пуле"""
 
         if DatabaseManager._connection_pool is not None:

@@ -49,14 +49,14 @@ MESSAGES: Dict[str, str] = {
 class DatabaseConfig:
     """Конфигурация базы данных"""
     
-    HOST = os.getenv("DB_HOST", "localhost")
-    PORT = int(os.getenv("DB_PORT", "5432"))
-    USER = os.getenv("DB_USER", "postgres")
-    PASSWORD = os.getenv("DB_PASSWORD")
-    NAME = os.getenv("DB_NAME", "query_db")
+    HOST: str = os.getenv("DB_HOST", "localhost")
+    PORT: int = int(os.getenv("DB_PORT", "5432"))
+    USER: str = os.getenv("DB_USER", "postgres")
+    PASSWORD: str | None = os.getenv("DB_PASSWORD")
+    NAME: str = os.getenv("DB_NAME", "query_db")
     
-    POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
-    POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
+    POOL_MIN_SIZE: int = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
+    POOL_MAX_SIZE: int = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
     
     @classmethod
     def get_connection_string(cls) -> str:
@@ -64,7 +64,7 @@ class DatabaseConfig:
         return f"postgresql://{cls.USER}:{cls.PASSWORD}@{cls.HOST}:{cls.PORT}/{cls.NAME}"
     
     @classmethod
-    def validate(cls):
+    def validate(cls) -> None:
         """Проверяет наличие обязательных параметров"""
         if not cls.PASSWORD:
             raise ValueError("DB_PASSWORD не установлен в переменных окружения")

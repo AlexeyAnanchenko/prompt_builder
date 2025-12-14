@@ -6,7 +6,7 @@ logger = setup_logger(__name__)
 class PromptGenerator:
     """Генератор финальных промптов с контекстом"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         logger.info("PromptGenerator инициализирован")
     
     def generate(

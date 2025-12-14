@@ -42,7 +42,7 @@ class DbDataLoader:
         self._index_data(raw_data)
         logger.info(f"DbDataLoader initialized with {sum(len(v) for v in self.db.values())} records.")
 
-    def _index_data(self, raw_data: Dict[str, List[Dict[str, Any]]]):
+    def _index_data(self, raw_data: Dict[str, List[Dict[str, Any]]]) -> None:
         for table, rows in raw_data.items():
             if not rows: continue
             self.table_cols[table] = list(rows[0].keys())
@@ -50,7 +50,7 @@ class DbDataLoader:
                 pk = self._get_pk_key(table, row)
                 self.db[table][pk] = row
 
-    def _get_pk_key(self, table_name: str, row: Dict[str, Any]):
+    def _get_pk_key(self, table_name: str, row: Dict[str, Any]) -> tuple:
         if table_name in self.pks:
             return tuple(str(row.get(k, '')) for k in self.pks[table_name])
         return tuple(row.values())
@@ -66,15 +66,15 @@ class ContextResolver:
         self.prop_regex = re.compile(r'\b([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b')
         self.param_regex = re.compile(r'\{([a-zA-Z0-9_]+)\}')
 
-    def resolve_by_dataset(self, dataset_id: str):
+    def resolve_by_dataset(self, dataset_id: str) -> bool:
         found = False
         for pk, row in self.loader.db['datasets'].items():
-            if pk[2] == dataset_id: 
+            if pk[2] == dataset_id:
                 self._add_dataset(pk)
                 found = True
         return found
     
-    def resolve_by_entity(self, entity_type: str):
+    def resolve_by_entity(self, entity_type: str) -> bool:
         found = False
         for pk, row in self.loader.db['entities'].items():
             if pk[2] == entity_type:

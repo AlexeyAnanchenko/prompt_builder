@@ -45,13 +45,13 @@ class ContextMasker:
         # 7. Отдельные слова (для Java-style условий: structRoots != null)
         self.re_word = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\b")
 
-    def clear(self):
+    def clear(self) -> None:
         self.map_forward.clear()
         self.map_reverse.clear()
         self.counters.clear()
         self.known_parameters.clear()
 
-    def set_known_parameters(self, params: Set[str]):
+    def set_known_parameters(self, params: Set[str]) -> None:
         """Загружает список известных ID параметров, чтобы детектировать их в Java-условиях."""
         self.known_parameters = params
 
