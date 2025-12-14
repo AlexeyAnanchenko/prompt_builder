@@ -69,10 +69,12 @@ prompt_builder/
 │   ├── context_engine.py # Загрузка данных БД, разрешение контекста, генерация SQL
 │   ├── masking.py        # Маскирование и расшифровка имён
 │   ├── prompt_generator.py # Сборка финального промпта
-│   └── version_manager.py # Управление версиями системных промптов
+│   ├── version_manager.py # Управление версиями системных промптов
+│   └── schema_config.py  # Конфигурация схемы БД и маппинг полей
 ├── services/             # Сервисы
 │   ├── __init__.py
-│   └── database.py      # Менеджер подключения к PostgreSQL
+│   ├── database.py      # Менеджер подключения к PostgreSQL
+│   └── context_service.py # Сервис оркестрации подбора контекста и генерации промптов
 ├── ui/                   # Пользовательский интерфейс
 │   ├── __init__.py
 │   ├── components.py    # Переиспользуемые компоненты Streamlit
