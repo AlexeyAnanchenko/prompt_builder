@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-
+from typing import Optional
 
 def setup_logger(
     name: str,
@@ -10,51 +10,56 @@ def setup_logger(
     console_output: bool = True
 ) -> logging.Logger:
     """
-    Настраивает и возвращает логгер с файловым и консольным выводом
-    
+    Настраивает и возвращает логгер с файловым и консольным выводом.
+    Реализует паттерн Singleton для логгера (если уже настроен, возвращает существующий).
+
     Args:
-        name: Имя логгера (обычно __name__ модуля)
-        log_file: Путь к файлу логов
-        level: Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        console_output: Выводить ли логи в консоль
+        name (str): Имя логгера (обычно передается __name__ модуля).
+        log_file (str): Путь к файлу, куда будут писаться логи.
+        level (int): Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        console_output (bool): Если True, дублирует логи в stdout (консоль).
         
     Returns:
-        logging.Logger: Настроенный логгер
+        logging.Logger: Настроенный объект логгера.
         
     Пример использования:
         logger = setup_logger(__name__)
         logger.info("Приложение запущено")
-        logger.error("Произошла ошибка", exc_info=True)
     """
-    # Получаем логгер
+    # Получаем или создаем логгер с указанным именем
     logger = logging.getLogger(name)
     
-    # Если у логгера уже есть обработчики, не добавляем новые
+    # Проверка: если у логгера уже есть обработчики (handlers), значит он уже был настроен.
+    # Возвращаем его как есть, чтобы не плодить дублирующиеся строки в логах.
     if logger.handlers:
         return logger
     
+    # Устанавливаем минимальный уровень логирования
     logger.setLevel(level)
     
-    # Формат сообщений
+    # Формат сообщений: [Дата Время] - [Имя модуля] - [Уровень] - [Сообщение]
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Файловый обработчик
+    # --- 1. Настройка записи в файл ---
     try:
-        # Создаём директорию logs, если её нет
+        # Используем pathlib для создания объекта пути
         log_path = Path(log_file)
+        # Создаём директорию logs (и родительские, если надо), если её нет
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Обработчик для записи в файл с кодировкой utf-8 (важно для кириллицы)
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except Exception as e:
+        # Если не удалось создать файл (например, нет прав), пишем в консоль
         print(f"⚠️ Не удалось создать файл логов: {e}")
     
-    # Консольный обработчик
+    # --- 2. Настройка вывода в консоль ---
     if console_output:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
@@ -66,15 +71,17 @@ def setup_logger(
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Получает существующий логгер или создаёт новый
+    Вспомогательная функция. Получает существующий логгер или создаёт новый 
+    с настройками по умолчанию, если он еще не инициализирован.
     
     Args:
-        name: Имя логгера
+        name (str): Имя логгера.
         
     Returns:
-        logging.Logger: Логгер
+        logging.Logger: Объект логгера.
     """
     logger = logging.getLogger(name)
+    # Если логгер "пустой" (нет обработчиков), инициализируем его
     if not logger.handlers:
         return setup_logger(name)
     return logger
