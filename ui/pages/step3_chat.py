@@ -1,13 +1,26 @@
 import streamlit as st
+from typing import Optional
+
 from ui.components import render_step_toggle_button, render_button_pair
+from core.masking import ContextMasker
 from utils.logger import setup_logger
 
+# Настраиваем логгер
 logger = setup_logger(__name__)
 
 def render_step3() -> None:
-    """Рендерит шаг 3: Диалог с LLM"""
-    logger.info("Рендер шага 3: Диалог с LLM")
+    """
+    Рендерит Шаг 3: Диалог с LLM.
     
+    Включает в себя:
+    1. Двусторонний чат: Слева (Human/Real), Справа (LLM/Masked).
+    2. Кнопки трансляции (Шифрование -> / <- Расшифровка).
+    3. Словарь замен для справки.
+    4. Режимы просмотра (Редактор / Markdown Preview).
+    """
+    logger.debug("Рендер шага 3: Чат")
+    
+    # Кнопка сворачивания/разворачивания
     render_step_toggle_button(
         step_number=3,
         title="Диалог с LLM",
@@ -17,14 +30,16 @@ def render_step3() -> None:
     if not st.session_state.get('show_step3', True):
         return
 
-    # Проверка наличия маскера
-    masker = st.session_state.get("masker")
+    # Проверка: загружен ли маскер и есть ли в нем данные
+    # Используем get() для безопасного доступа
+    masker: Optional[ContextMasker] = st.session_state.get("masker")
+    
     if not masker or not masker.map_forward:
         st.warning("⚠️ Словарь замен пуст. Сначала выполните генерацию на Шаге 2.")
         return
 
-    # === ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ ===
-    # Хранилище данных (не зависит от виджетов)
+    # === ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ (SESSION STATE) ===
+    # Создаем ключи, если их нет (значения сохраняются между перезагрузками)
     if "chat_data_human" not in st.session_state:
         st.session_state.chat_data_human = ""
     if "chat_data_llm" not in st.session_state:
@@ -32,7 +47,7 @@ def render_step3() -> None:
         
     # Настройки UI
     if "chat_view_mode" not in st.session_state:
-        st.session_state.chat_view_mode = "edit"
+        st.session_state.chat_view_mode = "edit" # или "preview"
     if "chat_textarea_height" not in st.session_state:
         st.session_state.chat_textarea_height = 600
     if "show_visual_settings" not in st.session_state:
@@ -40,16 +55,17 @@ def render_step3() -> None:
     if "chat_column_ratio" not in st.session_state:
         st.session_state.chat_column_ratio = 50
 
-    # Ключи для виджетов
+    # Ключи для привязки виджетов
     KEY_WIDGET_HUMAN = "widget_chat_human"
     KEY_WIDGET_LLM = "widget_chat_llm"
 
     # === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
-    def sync_state():
+    def sync_state() -> None:
         """
         Синхронизация: Виджет -> Переменная.
-        Вызывается при любом вводе текста пользователем.
+        Вызывается при любом вводе текста пользователем (on_change).
+        Это гарантирует, что st.session_state.chat_data_* всегда актуальны.
         """
         if KEY_WIDGET_HUMAN in st.session_state:
             st.session_state.chat_data_human = st.session_state[KEY_WIDGET_HUMAN]
@@ -57,61 +73,63 @@ def render_step3() -> None:
         if KEY_WIDGET_LLM in st.session_state:
             st.session_state.chat_data_llm = st.session_state[KEY_WIDGET_LLM]
 
-    def update_widget_state(key: str, value: str):
+    def update_widget_state(key: str, value: str) -> None:
         """
         Принудительное обновление: Переменная -> Виджет.
-        Используется кнопками для изменения текста в полях.
+        Используется кнопками (шифрование/очистка) для изменения текста в полях.
         """
         st.session_state[key] = value
 
     # === ОБРАБОТЧИКИ КНОПОК (CALLBACKS) ===
 
-    def on_encrypt_click():
-        """Шифруем: Human -> LLM"""
-        # 1. Берем актуальный текст из Human (даже если только что ввели)
+    def on_encrypt_click() -> None:
+        """Действие: Зашифровать (Human -> LLM)."""
+        # 1. Берем текст из виджета или из стейта
         text = st.session_state.get(KEY_WIDGET_HUMAN, st.session_state.chat_data_human)
         
         if text and masker:
+            # 2. Маскируем
             masked = masker.mask_text(text)
-            # 2. Обновляем хранилище LLM
+            # 3. Обновляем хранилище LLM
             st.session_state.chat_data_llm = masked
-            # 3. Принудительно обновляем виджет LLM
+            # 4. Обновляем виджет LLM
             update_widget_state(KEY_WIDGET_LLM, masked)
             logger.info(f"Зашифровано {len(text)} символов")
         else:
             st.toast("Нечего шифровать (поле пустое)", icon="⚠️")
 
-    def on_decrypt_click():
-        """Расшифровываем: LLM -> Human"""
-        # 1. Берем актуальный текст из LLM
+    def on_decrypt_click() -> None:
+        """Действие: Расшифровать (LLM -> Human)."""
         text = st.session_state.get(KEY_WIDGET_LLM, st.session_state.chat_data_llm)
         
         if text and masker:
             unmasked = masker.unmask_text(text)
-            # 2. Обновляем хранилище Human
             st.session_state.chat_data_human = unmasked
-            # 3. Принудительно обновляем виджет Human
             update_widget_state(KEY_WIDGET_HUMAN, unmasked)
             logger.info(f"Расшифровано {len(text)} символов")
         else:
             st.toast("Нечего расшифровывать (поле пустое)", icon="⚠️")
 
-    def on_clear_human():
+    def on_clear_human() -> None:
         st.session_state.chat_data_human = ""
         update_widget_state(KEY_WIDGET_HUMAN, "")
 
-    def on_clear_llm():
+    def on_clear_llm() -> None:
         st.session_state.chat_data_llm = ""
         update_widget_state(KEY_WIDGET_LLM, "")
 
-    def on_clear_both():
+    def on_clear_both() -> None:
+        logger.info("Очистка обоих полей чата")
         on_clear_human()
         on_clear_llm()
 
-    def toggle_view_mode():
-        # Перед переключением сохраняем текущее состояние виджетов
+    def toggle_view_mode() -> None:
+        """Переключение между режимом редактирования и Markdown-просмотром."""
+        # Перед переключением сохраняем текущее состояние ввода
         sync_state()
-        st.session_state.chat_view_mode = "preview" if st.session_state.chat_view_mode == "edit" else "edit"
+        new_mode = "preview" if st.session_state.chat_view_mode == "edit" else "edit"
+        st.session_state.chat_view_mode = new_mode
+        logger.debug(f"Режим просмотра изменен на: {new_mode}")
 
     # === ОТРИСОВКА ИНТЕРФЕЙСА ===
 
@@ -141,18 +159,19 @@ def render_step3() -> None:
         with col_mode:
             view_icon = "📝" if st.session_state.chat_view_mode == "preview" else "📖"
             view_label = "Редактировать" if st.session_state.chat_view_mode == "preview" else "Просмотр (Markdown)"
-            if st.button(f"{view_icon} {view_label}", key="toggle_view_mode", width='stretch'):
+            if st.button(f"{view_icon} {view_label}", key="toggle_view_mode", use_container_width=True):
                 toggle_view_mode()
                 st.rerun()
         
         with col_clear:
-            if st.button("🗑️ Очистить всё", key="clear_both_btn", width='stretch'):
+            if st.button("🗑️ Очистить всё", key="clear_both_btn", use_container_width=True):
                 on_clear_both()
                 st.rerun()
     
     with col_dictionary:
-        # Словарь замен
+        # Словарь замен (отображение)
         with st.expander(f"🔐 Словарь замен ({len(masker.map_forward)} элементов)", expanded=False):
+            # Сортировка масок (Natural Sort: ENT_1, ENT_2, ENT_10)
             def natural_sort_key(item):
                 mask_val = item[1]
                 try:
@@ -171,7 +190,7 @@ def render_step3() -> None:
             st.dataframe(
                 df_data, 
                 height=300, 
-                width='stretch',
+                width='stretch', # Растягивает таблицу на ширину колонки
                 hide_index=True,
                 column_config={
                     "Category": st.column_config.TextColumn("Категория", width="small"),
@@ -182,10 +201,10 @@ def render_step3() -> None:
 
     st.markdown("---")
 
-    # 2. Расчет ширины колонок
+    # 2. Расчет ширины колонок (Flexbox simulation)
     ratio = st.session_state.chat_column_ratio / 100.0
     total_flex = 20
-    center_flex = 1.5
+    center_flex = 1.5 # Фиксированная ширина центральной колонки с кнопками
     
     left_flex = (total_flex - center_flex) * ratio
     right_flex = (total_flex - center_flex) * (1 - ratio)
@@ -200,6 +219,7 @@ def render_step3() -> None:
         st.subheader("👨‍💻 Реальные данные")
         
         if not is_preview:
+            # Инициализация ключа в session_state перед созданием виджета
             if KEY_WIDGET_HUMAN not in st.session_state:
                 st.session_state[KEY_WIDGET_HUMAN] = st.session_state.chat_data_human
                 
@@ -227,11 +247,12 @@ def render_step3() -> None:
     # === ЦЕНТРАЛЬНАЯ КОЛОНКА (КНОПКИ) ===
     with col_actions:
         if not is_preview:
+            # Отступ для вертикального центрирования кнопок
             st.markdown(f"<div style='height: {height // 2 - 40}px;'></div>", unsafe_allow_html=True)
             
-            st.button("➡️", key="btn_enc", width='stretch', help="Зашифровать", on_click=on_encrypt_click)
+            st.button("➡️", key="btn_enc", use_container_width=True, help="Зашифровать", on_click=on_encrypt_click)
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            st.button("⬅️", key="btn_dec", width='stretch', help="Расшифровать", on_click=on_decrypt_click)
+            st.button("⬅️", key="btn_dec", use_container_width=True, help="Расшифровать", on_click=on_decrypt_click)
 
     # === ПРАВАЯ КОЛОНКА (LLM) ===
     with col_llm:
